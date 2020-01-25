@@ -16,6 +16,9 @@ from scipy.sparse.linalg import spilu
 import matplotlib.pyplot as plt
 
 #%%
+
+############### ThreeDChannel_Casesetup function ##############################
+
 #-----------------------------------------------------------------------------#
 # Channel Flow Solver Case Setup
 #-----------------------------------------------------------------------------#
@@ -26,7 +29,6 @@ import matplotlib.pyplot as plt
 # a randomized disturbance
 # runmode = 2: Re-initialize results from runmode=1 onto new, interpolated
 # grid
-
 
 runmode = 0
 retain = 1 # Select whether to save results 
@@ -40,7 +42,7 @@ interpolatenew = 0 # Select whether to interpolate results onto a new grid
 # Note that turbulence simulation is not feasible with explicit Euler (1)
 TIM = 4 
 
-#ThreeDChannel_Butchertableau function
+############### ThreeDChannel_Butchertableau function #########################
 
 # Input data from relevant Butcher tableau (see literature for more explicit options)
 
@@ -93,8 +95,8 @@ statinit = 1 # Time step number for statistics initalization
 # preconditioned conjugate gradient (PCG)
 #-----------------------------------------------------------------------------#
  
-sbicg = 1
-spcg = 0
+sbicg = 1 # for bicgstab
+spcg = 0  # for preconditioned Conjugate gradient
 
 #-----------------------------------------------------------------------------#
 # Set parameters for linear equation solvers. Maximum iterations, diagonal
@@ -132,7 +134,7 @@ Uscale = 1.2*Unom
 utnom = np.sqrt(0.5*Height*gx)
 
 if runmode == 0:
-    UF = 0
+    UF = 0  # laminar flow
 elif runmode == 1:
     UF = 0.4 # Relative fluctuation magnitude for turbulence generation
 elif runmode == 2:
@@ -184,6 +186,8 @@ MSRflucwplus = (MSRfluc[:,4])**0.5;
 MSRflucuvplus = MSRfluc[:,5];
 
 #%%
+############### ThreeDChannel_CreateFields function ###########################
+
 #-----------------------------------------------------------------------------#
 # Initialize enumeration matrix
 #-----------------------------------------------------------------------------#
@@ -203,7 +207,6 @@ for k in range(N3):
             A[i,j,k] = int(pp)
             pp = pp +1
 
-#%%  
 #A = np.reshape(A,[N1,N2,N3])
 
 dx = Length/N2; dy = Width/N1; dz = Height/(N3-2);
@@ -214,6 +217,10 @@ y = np.linspace(dy,Width,N1); y = y-dy/2;
 
 FX = np.zeros((N1,N2,N3)); FX[:,:,:] = dx; # 1D "Cell size"
 FY = np.zeros((N1,N2,N3)); FY[:,:,:] = dy; # 1D "Cell size"
+
+#-----------------------------------------------------------------------------#
+# Define wall-normal points via a hyperbolic tangent function
+#-----------------------------------------------------------------------------#
 
 fz = np.linspace(-(N3/2-1),(N3/2-1),N3-1);
 fz = np.tanh(ctanh*fz);
@@ -286,6 +293,8 @@ if runmode == 2:
     if resume == 1:
         # load('Field2')
         print('Field2 load script to be added resume')
+        
+        #??? interpolate script to be added
 
 #-----------------------------------------------------------------------------#
 # Matrix numbering reference for discrete differential operators
@@ -304,7 +313,16 @@ w = np.reshape(W,[-1,1],order='F')
 
 pold = np.zeros((N1*N2*(N3-2),1))
 
-#%% ThreeDChannel_Differentiate1 function
+#%% 
+
+############### ThreeDChannel_Differentiate1 function ##########################
+
+#-----------------------------------------------------------------------------#
+# This section entails the construction of linear differencing operators.
+# Importantly, periodic, Dirichlet and Neumann boundary conditions
+# have been built into these operators.
+#-----------------------------------------------------------------------------#
+
 def ThreeDChannel_Differentiate1(N1,N2,N3,FX,FY,FZ,
                                  inx,iny,inz,A0,AN,AS,AE,AW,AA,AG,east,
                                  west,north,south,air,ground,inb):
@@ -366,19 +384,6 @@ def ThreeDChannel_Differentiate1(N1,N2,N3,FX,FY,FZ,
                    
     return M
 
-# Generate discrete operators for first derivatives
-Dx = ThreeDChannel_Differentiate1(N1,N2,N3,FX,FY,FZ,
-                                 inx,iny,inz,A0,AN,AS,AE,AW,AA,AG,east,
-                                 west,north,south,air,ground,2)
-
-Dy = ThreeDChannel_Differentiate1(N1,N2,N3,FX,FY,FZ,
-                                 inx,iny,inz,A0,AN,AS,AE,AW,AA,AG,east,
-                                 west,north,south,air,ground,1)
-
-Dz = ThreeDChannel_Differentiate1(N1,N2,N3,FX,FY,FZ,
-                                 inx,iny,inz,A0,AN,AS,AE,AW,AA,AG,east,
-                                 west,north,south,air,ground,3)
-
 #%% ThreeDChannel_Differentiate2 function
 def ThreeDChannel_Differentiate2(N1,N2,N3,FX,FY,FZ,
                                  inx,iny,inz,A0,AN,AS,AE,AW,AA,AG,east,
@@ -436,20 +441,7 @@ def ThreeDChannel_Differentiate2(N1,N2,N3,FX,FY,FZ,
     
     M = sp.csc_matrix(M, copy=False)
                     
-    return M
-
-# Generate discrete operators for second derivatives
-Dxx = ThreeDChannel_Differentiate2(N1,N2,N3,FX,FY,FZ,
-                                 inx,iny,inz,A0,AN,AS,AE,AW,AA,AG,east,
-                                 west,north,south,air,ground,2)
-
-Dyy = ThreeDChannel_Differentiate2(N1,N2,N3,FX,FY,FZ,
-                                 inx,iny,inz,A0,AN,AS,AE,AW,AA,AG,east,
-                                 west,north,south,air,ground,1)
-
-Dzz = ThreeDChannel_Differentiate2(N1,N2,N3,FX,FY,FZ,
-                                 inx,iny,inz,A0,AN,AS,AE,AW,AA,AG,east,
-                                 west,north,south,air,ground,3)                  
+    return M             
                 
 #%% ThreeDChannel_Differentiate1p function
 
@@ -513,20 +505,6 @@ def ThreeDChannel_Differentiate1p(N1,N2,N3,FX,FY,FZ,
     M = sp.csc_matrix(M, copy=False)
             
     return M
-
-# Generate discrete operators for first pressure derivatives
-Dxp = ThreeDChannel_Differentiate1p(N1,N2,N3,FX,FY,FZ,
-                                 inx,iny,inz,A0,AN,AS,AE,AW,AA,AG,east,
-                                 west,north,south,air,ground,2)
-
-Dyp = ThreeDChannel_Differentiate1p(N1,N2,N3,FX,FY,FZ,
-                                 inx,iny,inz,A0,AN,AS,AE,AW,AA,AG,east,
-                                 west,north,south,air,ground,1)
-
-Dzp = ThreeDChannel_Differentiate1p(N1,N2,N3,FX,FY,FZ,
-                                 inx,iny,inz,A0,AN,AS,AE,AW,AA,AG,east,
-                                 west,north,south,air,ground,3)
-
 
 #%% ThreeDChannel_CreatePoissonMatrix function
 
@@ -605,16 +583,84 @@ def ThreeDChannel_CreatePoissonMatrix(N1,N2,N3,FX,FY,FZ,
     
     return M
 
-# Generate Poisson operator
-M = ThreeDChannel_CreatePoissonMatrix(N1,N2,N3,FX,FY,FZ,
-                                 inx,iny,inz,A0,AN,AS,AE,AW,AA,AG,east,
-                                 west,north,south,air,ground)
+#%%
+if resumeoperators == 1:
+    print('Loading saved differential operators...')
+    if runmode == 0:
+        data = np.load('Operators0.npz')
+    if runmode == 1:
+        data = np.load('Operators1.npz')
+    if runmode == 2:
+        data = np.load('Operators2.npz')
+    
+    Dx = data['Dx']
+    Dy = data['Dy']
+    Dz = data['Dz']
+    Dxx = data['Dxx']
+    Dyy = data['Dyy']
+    Dzz = data['Dzz']
+    Dxp = data['Dxp']
+    Dyp = data['Dyp']
+    Dzp = data['Dzp']
+    M = data['M']
 
-#%% save operators script to be added
-#if retainoperators == 1:
-#    np.savez('Operators0.npz', Dx=Dx, Dy=Dy)
-#
-#spm = np.load('Operators0.npz')
+else:    
+    # Generate discrete operators for first derivatives
+    Dx = ThreeDChannel_Differentiate1(N1,N2,N3,FX,FY,FZ,
+                                     inx,iny,inz,A0,AN,AS,AE,AW,AA,AG,east,
+                                     west,north,south,air,ground,2)
+    
+    Dy = ThreeDChannel_Differentiate1(N1,N2,N3,FX,FY,FZ,
+                                     inx,iny,inz,A0,AN,AS,AE,AW,AA,AG,east,
+                                     west,north,south,air,ground,1)
+    
+    Dz = ThreeDChannel_Differentiate1(N1,N2,N3,FX,FY,FZ,
+                                     inx,iny,inz,A0,AN,AS,AE,AW,AA,AG,east,
+                                     west,north,south,air,ground,3)
+    
+    # Generate discrete operators for second derivatives
+    Dxx = ThreeDChannel_Differentiate2(N1,N2,N3,FX,FY,FZ,
+                                     inx,iny,inz,A0,AN,AS,AE,AW,AA,AG,east,
+                                     west,north,south,air,ground,2)
+    
+    Dyy = ThreeDChannel_Differentiate2(N1,N2,N3,FX,FY,FZ,
+                                     inx,iny,inz,A0,AN,AS,AE,AW,AA,AG,east,
+                                     west,north,south,air,ground,1)
+    
+    Dzz = ThreeDChannel_Differentiate2(N1,N2,N3,FX,FY,FZ,
+                                     inx,iny,inz,A0,AN,AS,AE,AW,AA,AG,east,
+                                     west,north,south,air,ground,3)    
+    
+    # Generate discrete operators for first pressure derivatives
+    Dxp = ThreeDChannel_Differentiate1p(N1,N2,N3,FX,FY,FZ,
+                                     inx,iny,inz,A0,AN,AS,AE,AW,AA,AG,east,
+                                     west,north,south,air,ground,2)
+    
+    Dyp = ThreeDChannel_Differentiate1p(N1,N2,N3,FX,FY,FZ,
+                                     inx,iny,inz,A0,AN,AS,AE,AW,AA,AG,east,
+                                     west,north,south,air,ground,1)
+    
+    Dzp = ThreeDChannel_Differentiate1p(N1,N2,N3,FX,FY,FZ,
+                                     inx,iny,inz,A0,AN,AS,AE,AW,AA,AG,east,
+                                     west,north,south,air,ground,3)
+    
+    # Generate Poisson operator
+    M = ThreeDChannel_CreatePoissonMatrix(N1,N2,N3,FX,FY,FZ,
+                                     inx,iny,inz,A0,AN,AS,AE,AW,AA,AG,east,
+                                     west,north,south,air,ground)
+
+    # save operators script to be added
+    if retainoperators == 0:
+        np.savez('Operators0.npz', Dx=Dx, Dy=Dy, Dz=Dz, Dxx=Dxx, Dyy=Dyy, Dzz=Dzz,
+                 Dxp=Dxp, Dyp=Dyp, Dzp=Dzp, M=M)
+        
+    if retainoperators == 1:
+        np.savez('Operators1.npz', Dx=Dx, Dy=Dy, Dz=Dz, Dxx=Dxx, Dyy=Dyy, Dzz=Dzz,
+                 Dxp=Dxp, Dyp=Dyp, Dzp=Dzp, M=M)
+    
+    if retainoperators == 2:
+        np.savez('Operators2.npz', Dx=Dx, Dy=Dy, Dz=Dz, Dxx=Dxx, Dyy=Dyy, Dzz=Dzz,
+                 Dxp=Dxp, Dyp=Dyp, Dzp=Dzp, M=M)
 
 #%%
 # (to be done): understand precondiytiong and ilu, ichol in python
