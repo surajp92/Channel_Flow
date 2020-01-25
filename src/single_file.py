@@ -12,6 +12,7 @@ import scipy.io
 from scipy.sparse.linalg import cg
 from scipy.sparse.linalg import bicgstab
 from scipy.sparse.linalg import spilu
+import time
 
 import matplotlib.pyplot as plt
 
@@ -716,9 +717,43 @@ if retainoperators == 1:
         elif sbicg == 1:
             scipy.io.savemat('Preconditioners2.mat', {'Lbicg':Lbicg, 'Ubicg':Ubicg})
 
-#%% 
+
+#%%
 
 ############## ThreeDChannel_Projection function ##############################
+
+def projection(Dx,Dy,Dz,M,u,v,w,p,pold,C,Lbicg,Ubicg):
+#-----------------------------------------------------------------------------#
+# Compute divergence of velocity field
+#-----------------------------------------------------------------------------#
+    
+    DIV = Dx*u+Dy*v+Dz*w
+    
+    if spcg == 1:
+        C = C.T*C
+        [p,flag] = cg(-M,-DIV,pold,pcgtol,pcgmaxit,C)
+    
+    if sbicg == 1:
+        C = Lbicg*Ubicg
+        [p,flag] = bicgstab(M,DIV,pold,bicgtol,bicgmaxit,C)
+    
+    pold = p;
+    
+    # Compute pressure gradient
+    px = Dxp*p;
+    py = Dyp*p;
+    pz = Dzp*p;
+    
+    # Correct velocity field (vectors) with pressure gradient
+    u = u-px;
+    v = v-py;
+    w = w-pz;
+    
+    return u,v,w
+    
+#%% 
+
+################### Projection step ###########################################
         
 #-----------------------------------------------------------------------------#
 # Compute divergence of velocity field
@@ -745,122 +780,128 @@ pz = Dzp*p;
 u = u-px;
 v = v-py;
 w = w-pz;
-    
+
+
 #%% 
+if timing == 1:
+    start_time = time.time()
+    
+for i in range(nsteps):
 
 ############ ThreeDChannel_AdjustTimeStep function ############################
-
+    
 #-----------------------------------------------------------------------------#
 # Here, Courant numbers in three cartesian directions are sensed, and the
 # new time step is adjusted accordingly
 #-----------------------------------------------------------------------------#
-
-Cox = U*dt/FX[:,:,1:N3-1]
-Coy = V*dt/FY[:,:,1:N3-1]
-Coz = W*dt/FZ[:,:,1:N3-1]
-
-Co = Cox+Coy+Coz
-Comax = np.max(Co)
-
-if tstepopt == 0:
-    dt = setdt
-
-if tstepopt == 1:
-    dt = dt/(Comax/CoTarget)
     
-#%% ThreeDChannel_Solver
+    Cox = U*dt/FX[:,:,1:N3-1]
+    Coy = V*dt/FY[:,:,1:N3-1]
+    Coz = W*dt/FZ[:,:,1:N3-1]
     
+    Co = Cox+Coy+Coz
+    Comax = np.max(Co)
+    
+    if tstepopt == 0:
+        dt = setdt
+    
+    if tstepopt == 1:
+        dt = dt/(Comax/CoTarget)
+        
+############ ThreeDChannel_Solver function ############################
+        
 #-----------------------------------------------------------------------------#
 # Incompressible Navier-Stokes solver
 #-----------------------------------------------------------------------------#
-    
-# Convert 3D velocity arrays into column vectors
-u = np.reshape(U,[-1,1],order='F')
-v = np.reshape(V,[-1,1],order='F')
-w = np.reshape(W,[-1,1],order='F')
-
-# Store values from previous time step and create arrays for intermediary storage
-uold = u; uc = u
-vold = v; vc = v
-wold = w; wc = w   
-
-# Define the slope vectors (k)
-uk = np.zeros((N1*N2*(N3-2),s))
-vk = np.zeros((N1*N2*(N3-2),s))
-wk = np.zeros((N1*N2*(N3-2),s))
-
-for ii in range(s):
-
-# In the RK-loop, Uold is the velocity field obtained in the last iteration. 
-# Uc is the velocity field that is collated for the next time step.
-
-# Compute state ii according to the Runge-Kutta formula
-    
-    du = np.zeros((N1*N2*(N3-2),1))
-    dv = np.zeros((N1*N2*(N3-2),1))
-    dw = np.zeros((N1*N2*(N3-2),1))
-    
-    if ii >=1:
-        for jj in range(s):
-            # Here, the RK formula is used with the given Butcher tableau
-            du = du + a[ii,jj]*uk[:,jj]
-            dv = dv + a[ii,jj]*vk[:,jj]
-            dw = dw + a[ii,jj]*wk[:,jj]
         
-        u = uold + dt*du
-        v = vold + dt*dv
-        w = wold + dt*dw
+    # Convert 3D velocity arrays into column vectors
+    u = np.reshape(U,[-1,1],order='F')
+    v = np.reshape(V,[-1,1],order='F')
+    w = np.reshape(W,[-1,1],order='F')
+    
+    # Store values from previous time step and create arrays for intermediary storage
+    uold = u; uc = u
+    vold = v; vc = v
+    wold = w; wc = w   
+    
+    # Define the slope vectors (k)
+    uk = np.zeros((N1*N2*(N3-2),s))
+    vk = np.zeros((N1*N2*(N3-2),s))
+    wk = np.zeros((N1*N2*(N3-2),s))
+    
+    for ii in range(s):
+    
+    # In the RK-loop, Uold is the velocity field obtained in the last iteration. 
+    # Uc is the velocity field that is collated for the next time step.
+    
+    # Compute state ii according to the Runge-Kutta formula
         
-        # Make pressure field estimate based on previously solved pressures
+        du = np.zeros((N1*N2*(N3-2),1))
+        dv = np.zeros((N1*N2*(N3-2),1))
+        dw = np.zeros((N1*N2*(N3-2),1))
         
-        # ThreeDChannel_Projection (to be done)
+        if ii >=1:
+            for jj in range(s):
+                # Here, the RK formula is used with the given Butcher tableau
+                du = du + a[ii,jj]*uk[:,jj]
+                dv = dv + a[ii,jj]*vk[:,jj]
+                dw = dw + a[ii,jj]*wk[:,jj]
+            
+            u = uold + dt*du
+            v = vold + dt*dv
+            w = wold + dt*dw
+            
+            # Make pressure field estimate based on previously solved pressures
+            
+            u,v,w = projection(Dx,Dy,Dz,M,u,v,w,p,pold,C,Lbicg,Ubicg)
+    
+        # Begin computing Navier-Stokes contributions
+        
+        # Convection term (skew-symmetric) - cartesian components
+        # Note: Neumann BC operator Dzp is used for velocity product differentiation 
+        # across the channel wall
+        
+        CONVx = 0.5*(Dx*(u*u) + Dy*(v*u) + Dzp*(w*u) + u*(Dx*u) + v*(Dy*u) + w*(Dz*u))
+        CONVy = 0.5*(Dx*(u*v) + Dy*(v*v) + Dzp*(w*v) + u*(Dx*v) + v*(Dy*v) + w*(Dz*v))
+        CONVz = 0.5*(Dx*(u*w) + Dy*(v*w) + Dzp*(w*w) + u*(Dx*w) + v*(Dy*w) + w*(Dz*w))     
+        
+        # Diffusion term - cartesian components
+        DIFFx = nu*(Dxx*u + Dyy*u + Dzz*u)
+        DIFFy = nu*(Dxx*v + Dyy*v + Dzz*v)
+        DIFFz = nu*(Dxx*w + Dyy*w + Dzz*w)
+        
+        # Implementation into momentum equation
+        uk[:,ii] = -CONVx + DIFFx + gx
+        vk[:,ii] = -CONVy + DIFFy + gy
+        wk[:,ii] = -CONVz + DIFFz + gz
+                     
+        # End computing contributions
+        # [du dv dw]^T are the k_i slope
+        
+        # Contribution of step i is added to the collective contribution
+        # via coefficients defined by vector b
+        
+        uc = uc + dt*b[ii]*uk[:,ii]
+        vc = vc + dt*b[ii]*vk[:,ii]
+        wc = wc + dt*b[ii]*wk[:,ii]
+        
+        # on final loop
+        if ii == s:
+            u = uc; v = vc; w = wc
+    
+    # carry out final projection
+    u,v,w = projection(Dx,Dy,Dz,M,u,v,w,p,pold,C,Lbicg,Ubicg)
+    
+    U = np.reshape(u,[N1,N2,N3-2],order='F')
+    V = np.reshape(v,[N1,N2,N3-2],order='F')
+    W = np.reshape(w,[N1,N2,N3-2],order='F')
+    
+    Cox = U*dt/FX[:,:,1:N3-1]
+    Coy = V*dt/FY[:,:,1:N3-1]
+    Coz = W*dt/FZ[:,:,1:N3-1]
+    
+    Co = Cox+Coy+Coz
+    Comax = np.max(Co)
 
-    # Begin computing Navier-Stokes contributions
-    
-    # Convection term (skew-symmetric) - cartesian components
-    # Note: Neumann BC operator Dzp is used for velocity product differentiation 
-    # across the channel wall
-    
-    CONVx = 0.5*(Dx*(u*u) + Dy*(v*u) + Dzp*(w*u) + u*(Dx*u) + v*(Dy*u) + w*(Dz*u))
-    CONVy = 0.5*(Dx*(u*v) + Dy*(v*v) + Dzp*(w*v) + u*(Dx*v) + v*(Dy*v) + w*(Dz*v))
-    CONVz = 0.5*(Dx*(u*w) + Dy*(v*w) + Dzp*(w*w) + u*(Dx*w) + v*(Dy*w) + w*(Dz*w))     
-    
-    # Diffusion term - cartesian components
-    DIFFx = nu*(Dxx*u + Dyy*u + Dzz*u)
-    DIFFy = nu*(Dxx*v + Dyy*v + Dzz*v)
-    DIFFz = nu*(Dxx*w + Dyy*w + Dzz*w)
-    
-    # Implementation into momentum equation
-    uk[:,ii] = -CONVx + DIFFx + gx
-    vk[:,ii] = -CONVy + DIFFy + gy
-    wk[:,ii] = -CONVz + DIFFz + gz
-                 
-    # End computing contributions
-    # [du dv dw]^T are the k_i slope
-    
-    # Contribution of step i is added to the collective contribution
-    # via coefficients defined by vector b
-    
-    uc = uc + dt*b[ii]*uk[:,ii]
-    vc = vc + dt*b[ii]*vk[:,ii]
-    wc = wc + dt*b[ii]*wk[:,ii]
-    
-    # on final loop
-    if ii == s:
-        u = uc; v = vc; w = wc
-
-# carry out final projection
-# ThreeDChannel_Projection (to be done)
-
-U = np.reshape(u,[N1,N2,N3-2],order='F')
-V = np.reshape(v,[N1,N2,N3-2],order='F')
-W = np.reshape(w,[N1,N2,N3-2],order='F')
-
-Cox = U*dt/FX[:,:,1:N3-1]
-Coy = V*dt/FY[:,:,1:N3-1]
-Coz = W*dt/FZ[:,:,1:N3-1]
-
-Co = Cox+Coy+Coz
-Comax = np.max(Co)
-
-#%%
+if timing == 1:
+    end_time = time.time()
