@@ -317,12 +317,6 @@ pold = np.zeros((N1*N2*(N3-2),1))
 
 ############### ThreeDChannel_Differentiate1 function ##########################
 
-#-----------------------------------------------------------------------------#
-# This section entails the construction of linear differencing operators.
-# Importantly, periodic, Dirichlet and Neumann boundary conditions
-# have been built into these operators.
-#-----------------------------------------------------------------------------#
-
 def ThreeDChannel_Differentiate1(N1,N2,N3,FX,FY,FZ,
                                  inx,iny,inz,A0,AN,AS,AE,AW,AA,AG,east,
                                  west,north,south,air,ground,inb):
@@ -384,7 +378,10 @@ def ThreeDChannel_Differentiate1(N1,N2,N3,FX,FY,FZ,
                    
     return M
 
-#%% ThreeDChannel_Differentiate2 function
+#%% 
+
+############## ThreeDChannel_Differentiate2 function ##########################
+    
 def ThreeDChannel_Differentiate2(N1,N2,N3,FX,FY,FZ,
                                  inx,iny,inz,A0,AN,AS,AE,AW,AA,AG,east,
                                  west,north,south,air,ground,inb):
@@ -443,7 +440,9 @@ def ThreeDChannel_Differentiate2(N1,N2,N3,FX,FY,FZ,
                     
     return M             
                 
-#%% ThreeDChannel_Differentiate1p function
+#%% 
+
+########### ThreeDChannel_Differentiate1p function ############################
 
 def ThreeDChannel_Differentiate1p(N1,N2,N3,FX,FY,FZ,
                                  inx,iny,inz,A0,AN,AS,AE,AW,AA,AG,east,
@@ -506,7 +505,9 @@ def ThreeDChannel_Differentiate1p(N1,N2,N3,FX,FY,FZ,
             
     return M
 
-#%% ThreeDChannel_CreatePoissonMatrix function
+#%% 
+
+############# ThreeDChannel_CreatePoissonMatrix function ######################
 
 def ThreeDChannel_CreatePoissonMatrix(N1,N2,N3,FX,FY,FZ,
                                  inx,iny,inz,A0,AN,AS,AE,AW,AA,AG,east,
@@ -584,6 +585,15 @@ def ThreeDChannel_CreatePoissonMatrix(N1,N2,N3,FX,FY,FZ,
     return M
 
 #%%
+    
+############## ThreeDChannel_DifferentialOperators function ###################
+    
+#-----------------------------------------------------------------------------#
+# This section entails the construction of linear differencing operators.
+# Importantly, periodic, Dirichlet and Neumann boundary conditions
+# have been built into these operators.
+#-----------------------------------------------------------------------------#
+    
 if resumeoperators == 1:
     print('Loading saved differential operators...')
     if runmode == 0:
@@ -663,7 +673,11 @@ else:
                  Dxp=Dxp, Dyp=Dyp, Dzp=Dzp, M=M)
 
 #%%
-# (to be done): understand precondiytiong and ilu, ichol in python
+
+################ ThreeDChannel_Preconditioners function #######################
+         
+#??? understand precondiytiong and ilu, ichol in python
+
 if resumeoperators == 1 and runmode == 2:
     preconditioners = scipy.io.loadmat('Preconditioners2.mat')
 
@@ -676,16 +690,39 @@ if resumeoperators == 1 and runmode == 2:
 
 else:
     if spcg == 1:
-        C = spilu(M) # to be changed to incomplete cholesky
+        C = spilu(M) #??? to be changed to incomplete cholesky
         
     if sbicg == 1:
         P = spilu(M)
         Lbicg = P.L
         Ubicg = P.U
 
-#%% ThreeDChannel_Projection
+if retainoperators == 1:
+    if runmode == 0:
+        if spcg == 1:
+            scipy.io.savemat('Preconditioners0.mat', {'C':C})
+        elif sbicg == 1:
+            scipy.io.savemat('Preconditioners0.mat', {'Lbicg':Lbicg, 'Ubicg':Ubicg})
+    
+    if runmode == 1:
+        if spcg == 1:
+            scipy.io.savemat('Preconditioners1.mat', {'C':C})
+        elif sbicg == 1:
+            scipy.io.savemat('Preconditioners1.mat', {'Lbicg':Lbicg, 'Ubicg':Ubicg})
+    
+    if runmode == 2:
+        if spcg == 1:
+            scipy.io.savemat('Preconditioners2.mat', {'C':C})
+        elif sbicg == 1:
+            scipy.io.savemat('Preconditioners2.mat', {'Lbicg':Lbicg, 'Ubicg':Ubicg})
 
+#%% 
+
+############## ThreeDChannel_Projection function ##############################
+        
+#-----------------------------------------------------------------------------#
 # Compute divergence of velocity field
+#-----------------------------------------------------------------------------#
 
 DIV = Dx*u+Dy*v+Dz*w
 
@@ -709,10 +746,14 @@ u = u-px;
 v = v-py;
 w = w-pz;
     
-#%% ThreeDChannel_AdjustTimeStep
+#%% 
 
+############ ThreeDChannel_AdjustTimeStep function ############################
+
+#-----------------------------------------------------------------------------#
 # Here, Courant numbers in three cartesian directions are sensed, and the
 # new time step is adjusted accordingly
+#-----------------------------------------------------------------------------#
 
 Cox = U*dt/FX[:,:,1:N3-1]
 Coy = V*dt/FY[:,:,1:N3-1]
