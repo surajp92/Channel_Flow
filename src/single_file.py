@@ -33,7 +33,7 @@ import matplotlib.pyplot as plt
 
 runmode = 0
 retain = 1 # Select whether to save results 
-resume = 1 # Select whether to load results
+resume = 0 # Select whether to load results
 retainoperators = 1 # Select whether to save differential operators
 resumeoperators = 0 # Select whether to load differential operators
 interpolatenew = 0 # Select whether to interpolate results onto a new grid
@@ -82,7 +82,7 @@ if TIM == 4:
 # Simulation duration and time step options
 #-----------------------------------------------------------------------------#
 
-nsteps = 1E3 # Provide number of time steps
+nsteps = 2 # Provide number of time steps
 tstepopt = 1 # Time step option: 0 = fixed, 1 = dynamic
 setdt = 4.501E-3 # Fixed time step (requires tstepopt = 0)
 CoTarget = 0.5 # Provide target for maximum local Courant number
@@ -362,18 +362,18 @@ def ThreeDChannel_Differentiate1(N1,N2,N3,FX,FY,FZ,
                 
                 # Account for wall Dirichlet (no-slip) condition in the wall-normal direction
                 if inb == 3:
-                    if AG.ravel(order='F')[A0[i,j,k]] >= 1:
+                    if AG.ravel(order='F')[A0[i,j,k]] >= 0:
                         M[A0[i,j,k],AG.ravel(order='F')[A0[i,j,k]]] = -1/FZ0*FZ0/(FZ0+FZG)
                     else:
-                        M[A0[i,j,k],A0[i,j,k]] = 1/FZ0*(FZA/(FZ0+FZA)-FZG/(FZG+FZ0)
-                        +FZ0/(FZG+FZ0))
+                        M[A0[i,j,k],A0[i,j,k]] = 1/FZ0*(FZA/(FZ0+FZA)-FZG/(FZG+FZ0) + \
+                                                 FZ0/(FZG+FZ0))
                     
                     if AA.ravel(order='F')[A0[i,j,k]] < N1*N2*(N3-2):
                         M[A0[i,j,k],AA.ravel(order='F')[A0[i,j,k]]] = 1/FZ0*FZ0/(FZ0+FZA)
                     
                     else:
-                        M[A0[i,j,k],A0[i,j,k]] = 1/FZ0*(FZA/(FZ0+FZA)-FZG/(FZG+FZ0)
-                        -FZ0/(FZA+FZ0))
+                        M[A0[i,j,k],A0[i,j,k]] = 1/FZ0*(FZA/(FZ0+FZA)-FZG/(FZG+FZ0) - \
+                                                 FZ0/(FZA+FZ0))
     
     M = sp.csc_matrix(M, copy=False)
                    
@@ -427,7 +427,7 @@ def ThreeDChannel_Differentiate2(N1,N2,N3,FX,FY,FZ,
                 
                 # Account for wall Dirichlet (no-slip) condition in the wall-normal direction
                 if inb == 3:
-                    if AG.ravel(order='F')[A0[i,j,k]] >= 1:
+                    if AG.ravel(order='F')[A0[i,j,k]] >= 0:
                         M[A0[i,j,k],AG.ravel(order='F')[A0[i,j,k]]] = 2/(FZ0*(FZ0+FZG)) 
                     else:
                         M[A0[i,j,k],A0[i,j,k]] = -2/(FZ0*(FZ0+FZA)) - 4/(FZ0*(FZ0+FZG))
@@ -493,14 +493,14 @@ def ThreeDChannel_Differentiate1p(N1,N2,N3,FX,FY,FZ,
                     if AG.ravel(order='F')[A0[i,j,k]] >= 0:
                         M[A0[i,j,k],AG.ravel(order='F')[A0[i,j,k]]] = -1/FZ0*(FZ0/(FZ0+FZG))
                     else:
-                        M[A0[i,j,k],A0[i,j,k]] = 1/FZ0*(FZA/(FZ0+FZA)-FZG/(FZ0+FZG)
-                        -FZ0/(FZ0+FZG))
+                        M[A0[i,j,k],A0[i,j,k]] = 1/FZ0*(FZA/(FZ0+FZA)-FZG/(FZ0+FZG) - \
+                                                 FZ0/(FZ0+FZG))
                     
                     if AA.ravel(order='F')[A0[i,j,k]] < N1*N2*(N3-2):
                         M[A0[i,j,k],AA.ravel(order='F')[A0[i,j,k]]] = 1/FZ0*(FZ0/(FZ0+FZA))
                     else:
-                        M[A0[i,j,k],A0[i,j,k]] = 1/FZ0*(FZA/(FZ0+FZA)-FZG/(FZ0+FZG)
-                        +FZ0/(FZ0+FZA))
+                        M[A0[i,j,k],A0[i,j,k]] = 1/FZ0*(FZA/(FZ0+FZA)-FZG/(FZ0+FZG) + \
+                                                 FZ0/(FZ0+FZA))
     
     M = sp.csc_matrix(M, copy=False)
             
@@ -535,9 +535,9 @@ def ThreeDChannel_CreatePoissonMatrix(N1,N2,N3,FX,FY,FZ,
                 FZA = FZ[i,j,air[k]]
                 FZG = FZ[i,j,ground[k]]
                 
-                M[A0[i,j,k],A0[i,j,k]] = -2/(FY0*(FY0+FYN)) - 2/(FY0*(FY0+FYS))
-                -2/(FX0*(FX0+FXE)) - 2/(FX0*(FX0+FXW))
-                -2/(FZ0*(FZ0+FZA)) - 2/(FZ0*(FZ0+FZG))
+                M[A0[i,j,k],A0[i,j,k]] = -2/(FY0*(FY0+FYN)) - 2/(FY0*(FY0+FYS)) - \
+                                          2/(FX0*(FX0+FXE)) - 2/(FX0*(FX0+FXW)) - \
+                                          2/(FZ0*(FZ0+FZA)) - 2/(FZ0*(FZ0+FZG))
                 
                 M[A0[i,j,k],AN.ravel(order='F')[A0[i,j,k]]] = 2/(FY0*(FY0+FYN))
                 
@@ -548,19 +548,21 @@ def ThreeDChannel_CreatePoissonMatrix(N1,N2,N3,FX,FY,FZ,
                 M[A0[i,j,k],AW.ravel(order='F')[A0[i,j,k]]] = 2/(FX0*(FX0+FXW))
                 
                 # Implement Neumann wall BC
-                if AG.ravel(order='F')[A0[i,j,k]] >= 0:
-                    M[A0[i,j,k],AG.ravel(order='F')[A0[i,j,k]]] = 2/(FZ0*(FZ0+FZG))
-                else:
-                    M[A0[i,j,k],A0[i,j,k]] = -2/(FY0*(FY0+FYN)) -2/(FY0*(FY0+FYS))
-                    -2/(FX0*(FX0+FXE)) -2/(FX0*(FX0+FXW))
-                    -2/(FZ0*(FZ0+FZA))
-                
                 if AA.ravel(order='F')[A0[i,j,k]] < N1*N2*(N3-2):
                     M[A0[i,j,k],AA.ravel(order='F')[A0[i,j,k]]] = 2/(FZ0*(FZ0+FZA))
                 else:
-                    M[A0[i,j,k],A0[i,j,k]] = -2/(FY0*(FY0+FYN)) -2/(FY0*(FY0+FYS))
-                    -2/(FX0*(FX0+FXE)) -2/(FX0*(FX0+FXW))
-                    -2/(FZ0*(FZ0+FZG))
+                    M[A0[i,j,k],A0[i,j,k]] = -2/(FY0*(FY0+FYN)) -2/(FY0*(FY0+FYS)) - \
+                                              2/(FX0*(FX0+FXE)) -2/(FX0*(FX0+FXW)) - \
+                                              2/(FZ0*(FZ0+FZG))
+                    
+                if AG.ravel(order='F')[A0[i,j,k]] >= 0:
+                    M[A0[i,j,k],AG.ravel(order='F')[A0[i,j,k]]] = 2/(FZ0*(FZ0+FZG))
+                else:
+                    M[A0[i,j,k],A0[i,j,k]] = -2/(FY0*(FY0+FYN)) -2/(FY0*(FY0+FYS)) - \
+                                              2/(FX0*(FX0+FXE)) -2/(FX0*(FX0+FXW)) - \
+                                              2/(FZ0*(FZ0+FZA))
+                
+                
     
     i = round(N1/2)-1; j = int(N2/2-1); k = 1-1;
     
@@ -577,13 +579,14 @@ def ThreeDChannel_CreatePoissonMatrix(N1,N2,N3,FX,FY,FZ,
     FZG = FZ[i,j,ground[k]]
     
     # Fix pressure on a single bottom wall face to zero (Dirichlet cond.)
-    M[A0[i,j,k],A0[i,j,k]] = -2/(FY0*(FY0+FYN)) - 2/(FY0*(FY0+FYS))
-    -2/(FX0*(FX0+FXE)) - 2/(FX0*(FX0+FXW))
-    -2/(FZ0*(FZ0+FZA)) - 4/(FZ0*(FZ0+FZG))
+    M[A0[i,j,k],A0[i,j,k]] = -2/(FY0*(FY0+FYN)) - 2/(FY0*(FY0+FYS)) - \
+                              2/(FX0*(FX0+FXE)) - 2/(FX0*(FX0+FXW)) - \
+                              2/(FZ0*(FZ0+FZA)) - 4/(FZ0*(FZ0+FZG))
     
     M = sp.csc_matrix(M, copy=False)
     
     return M
+
 
 #%%
     
@@ -745,9 +748,9 @@ def projection(Dx,Dy,Dz,M,u,v,w,p,pold,C,Lbicg,Ubicg):
     pz = Dzp*p;
     
     # Correct velocity field (vectors) with pressure gradient
-    u = u-px;
-    v = v-py;
-    w = w-pz;
+    u = u-px.reshape(-1,1);
+    v = v-py.reshape(-1,1);
+    w = w-pz.reshape(-1,1);
     
     return u,v,w
     
@@ -777,9 +780,9 @@ py = Dyp*p;
 pz = Dzp*p;
 
 # Correct velocity field (vectors) with pressure gradient
-u = u-px;
-v = v-py;
-w = w-pz;
+u = u-px.reshape(-1,1);
+v = v-py.reshape(-1,1);
+w = w-pz.reshape(-1,1);
 
 
 #%% 
@@ -905,3 +908,123 @@ for i in range(nsteps):
 
 if timing == 1:
     end_time = time.time()
+
+#%%
+############ ThreeDChannel_AdjustTimeStep function ############################
+    
+#-----------------------------------------------------------------------------#
+# Here, Courant numbers in three cartesian directions are sensed, and the
+# new time step is adjusted accordingly
+#-----------------------------------------------------------------------------#
+    
+Cox = U*dt/FX[:,:,1:N3-1]
+Coy = V*dt/FY[:,:,1:N3-1]
+Coz = W*dt/FZ[:,:,1:N3-1]
+
+Co = Cox+Coy+Coz
+Comax = np.max(Co)
+
+if tstepopt == 0:
+    dt = setdt
+
+if tstepopt == 1:
+    dt = dt/(Comax/CoTarget)
+
+#%%        
+############ ThreeDChannel_Solver function ############################
+        
+#-----------------------------------------------------------------------------#
+# Incompressible Navier-Stokes solver
+#-----------------------------------------------------------------------------#
+        
+# Convert 3D velocity arrays into column vectors
+u = np.reshape(U,[-1,1],order='F')
+v = np.reshape(V,[-1,1],order='F')
+w = np.reshape(W,[-1,1],order='F')
+
+# Store values from previous time step and create arrays for intermediary storage
+uold = u; uc = u
+vold = v; vc = v
+wold = w; wc = w   
+
+# Define the slope vectors (k)
+uk = np.zeros((N1*N2*(N3-2),s))
+vk = np.zeros((N1*N2*(N3-2),s))
+wk = np.zeros((N1*N2*(N3-2),s))
+
+#%%
+for ii in range(s):
+
+# In the RK-loop, Uold is the velocity field obtained in the last iteration. 
+# Uc is the velocity field that is collated for the next time step.
+
+# Compute state ii according to the Runge-Kutta formula
+    
+    du = np.zeros((N1*N2*(N3-2),1))
+    dv = np.zeros((N1*N2*(N3-2),1))
+    dw = np.zeros((N1*N2*(N3-2),1))
+    
+    if ii >=1:
+        for jj in range(s):
+            # Here, the RK formula is used with the given Butcher tableau
+            du = du + a[ii,jj]*uk[:,jj].reshape(-1,1);
+            dv = dv + a[ii,jj]*vk[:,jj].reshape(-1,1);
+            dw = dw + a[ii,jj]*wk[:,jj].reshape(-1,1);
+        
+        u = uold + dt*du
+        v = vold + dt*dv
+        w = wold + dt*dw
+        
+        # Make pressure field estimate based on previously solved pressures
+        
+        ################### Projection step ###################################
+        u,v,w = projection(Dx,Dy,Dz,M,u,v,w,p,pold,C,Lbicg,Ubicg)
+        
+    # Begin computing Navier-Stokes contributions
+    
+    # Convection term (skew-symmetric) - cartesian components
+    # Note: Neumann BC operator Dzp is used for velocity product differentiation 
+    # across the channel wall
+    
+    CONVx = 0.5*(Dx*(u*u) + Dy*(v*u) + Dzp*(w*u) + u*(Dx*u) + v*(Dy*u) + w*(Dz*u))
+    CONVy = 0.5*(Dx*(u*v) + Dy*(v*v) + Dzp*(w*v) + u*(Dx*v) + v*(Dy*v) + w*(Dz*v))
+    CONVz = 0.5*(Dx*(u*w) + Dy*(v*w) + Dzp*(w*w) + u*(Dx*w) + v*(Dy*w) + w*(Dz*w))     
+    
+    # Diffusion term - cartesian components
+    DIFFx = nu*(Dxx*u + Dyy*u + Dzz*u)
+    DIFFy = nu*(Dxx*v + Dyy*v + Dzz*v)
+    DIFFz = nu*(Dxx*w + Dyy*w + Dzz*w)
+    
+    # Implementation into momentum equation
+    uk[:,ii] = (-CONVx + DIFFx + gx).flatten()
+    vk[:,ii] = (-CONVy + DIFFy + gy).flatten()
+    wk[:,ii] = (-CONVz + DIFFz + gz).flatten()
+                 
+    # End computing contributions
+    # [du dv dw]^T are the k_i slope
+    
+    # Contribution of step i is added to the collective contribution
+    # via coefficients defined by vector b
+    
+    uc = uc + dt*b[ii]*uk[:,ii].reshape(-1,1);
+    vc = vc + dt*b[ii]*vk[:,ii].reshape(-1,1);
+    wc = wc + dt*b[ii]*wk[:,ii].reshape(-1,1);
+    
+    # on final loop
+    if ii == s:
+        u = uc; v = vc; w = wc
+
+#%%
+# carry out final projection
+u,v,w = projection(Dx,Dy,Dz,M,u,v,w,p,pold,C,Lbicg,Ubicg)
+
+U = np.reshape(u,[N1,N2,N3-2],order='F')
+V = np.reshape(v,[N1,N2,N3-2],order='F')
+W = np.reshape(w,[N1,N2,N3-2],order='F')
+
+Cox = U*dt/FX[:,:,1:N3-1]
+Coy = V*dt/FY[:,:,1:N3-1]
+Coz = W*dt/FZ[:,:,1:N3-1]
+
+Co = Cox+Coy+Coz
+Comax = np.max(Co)
