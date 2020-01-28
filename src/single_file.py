@@ -13,6 +13,7 @@ from scipy.sparse.linalg import cg
 from scipy.sparse.linalg import bicgstab
 from scipy.sparse.linalg import spilu
 import time
+from numba import jit
 
 import matplotlib.pyplot as plt
 
@@ -82,12 +83,12 @@ if TIM == 4:
 # Simulation duration and time step options
 #-----------------------------------------------------------------------------#
 
-nsteps = 2 # Provide number of time steps
+nsteps = 50 # Provide number of time steps
 tstepopt = 1 # Time step option: 0 = fixed, 1 = dynamic
 setdt = 4.501E-3 # Fixed time step (requires tstepopt = 0)
-CoTarget = 0.5 # Provide target for maximum local Courant number
+CoTarget = 0.9 # Provide target for maximum local Courant number
                 # (requires tstepopt = 1)
-interval = 5 # Provide output interval
+interval = 10 # Provide output interval
 timing = 1 # Select whether the run is timed or not
 statinit = 1 # Time step number for statistics initalization
 
@@ -110,7 +111,7 @@ pscheme = 2; # Select order of pressure differentiation scheme for
              # prediction of intermediary pressures in time integration
              
 # Nominal setup:
-res = 4 # Resolution; must be divisible by 2
+res = 36 # Resolution; must be divisible by 2
 Wscale = 1/2 # Geometry span scale 
 Lscale = 1/2 # Geometry length scale
 N1 = round(2*res*Wscale) # Span
@@ -277,7 +278,10 @@ if runmode == 0:
     U[:,:,:] = Unom
 
 if runmode == 1:
-    # load('Field0') add variables saved from runmode = 0
+    data =  np.load('field0.npz') #add variables saved from runmode = 0
+    U = data['U']
+    V = data['V']
+    W = data['W']
     UF1 = UF*(np.random.rand(N1,N2,N3-2) - 0.5)
     UF2 = UF*(np.random.rand(N1,N2,N3-2) - 0.5)
     UF3 = UF*(np.random.rand(N1,N2,N3-2) - 0.5)
@@ -289,11 +293,17 @@ if runmode == 1:
         # load('Field1') add saved variables for runmode = 1
 
 if runmode == 2:
-    # load('Field1')
-    print('Field1 load script to be added')
+    data =  np.load('field1.npz') #add variables saved from runmode = 0
+    U = data['U']
+    V = data['V']
+    W = data['W']
+    #print('Field1 load script to be added')
     if resume == 1:
-        # load('Field2')
-        print('Field2 load script to be added resume')
+        data =  np.load('field2.npz') #add variables saved from runmode = 0
+        U = data['U']
+        V = data['V']
+        W = data['W']
+        #print('Field2 load script to be added resume')
         
         #??? interpolate script to be added
 
@@ -317,7 +327,7 @@ pold = np.zeros((N1*N2*(N3-2),1))
 #%% 
 
 ############### ThreeDChannel_Differentiate1 function ##########################
-
+#@jit
 def ThreeDChannel_Differentiate1(N1,N2,N3,FX,FY,FZ,
                                  inx,iny,inz,A0,AN,AS,AE,AW,AA,AG,east,
                                  west,north,south,air,ground,inb):
@@ -382,7 +392,7 @@ def ThreeDChannel_Differentiate1(N1,N2,N3,FX,FY,FZ,
 #%% 
 
 ############## ThreeDChannel_Differentiate2 function ##########################
-    
+#@jit    
 def ThreeDChannel_Differentiate2(N1,N2,N3,FX,FY,FZ,
                                  inx,iny,inz,A0,AN,AS,AE,AW,AA,AG,east,
                                  west,north,south,air,ground,inb):
@@ -444,7 +454,7 @@ def ThreeDChannel_Differentiate2(N1,N2,N3,FX,FY,FZ,
 #%% 
 
 ########### ThreeDChannel_Differentiate1p function ############################
-
+#@jit
 def ThreeDChannel_Differentiate1p(N1,N2,N3,FX,FY,FZ,
                                  inx,iny,inz,A0,AN,AS,AE,AW,AA,AG,east,
                                  west,north,south,air,ground,inb):
@@ -509,7 +519,7 @@ def ThreeDChannel_Differentiate1p(N1,N2,N3,FX,FY,FZ,
 #%% 
 
 ############# ThreeDChannel_CreatePoissonMatrix function ######################
-
+#@jit
 def ThreeDChannel_CreatePoissonMatrix(N1,N2,N3,FX,FY,FZ,
                                  inx,iny,inz,A0,AN,AS,AE,AW,AA,AG,east,
                                  west,north,south,air,ground):
@@ -738,7 +748,8 @@ def projection(Dx,Dy,Dz,M,u,v,w,p,pold,C,Lbicg,Ubicg):
     
     if sbicg == 1:
         C = Lbicg*Ubicg
-        [p,flag] = bicgstab(M,DIV,pold,bicgtol,bicgmaxit,C)
+        #[p,flag] = bicgstab(M,DIV,pold,bicgtol,bicgmaxit,C)
+        [p,flag] = bicgstab(M,DIV,pold,bicgtol,bicgmaxit)
     
     pold = p;
     
@@ -752,7 +763,7 @@ def projection(Dx,Dy,Dz,M,u,v,w,p,pold,C,Lbicg,Ubicg):
     v = v-py.reshape(-1,1);
     w = w-pz.reshape(-1,1);
     
-    return u,v,w
+    return u,v,w,pold
     
 #%% 
 
@@ -770,7 +781,8 @@ if spcg == 1:
 
 if sbicg == 1:
     C = Lbicg*Ubicg
-    [p,flag] = bicgstab(M,DIV,pold,bicgtol,bicgmaxit,C)
+    #[p,flag] = bicgstab(M,DIV,pold,bicgtol,bicgmaxit,C)
+    [p,flag] = bicgstab(M,DIV,pold,bicgtol,bicgmaxit)
 
 pold = p;
 
@@ -784,11 +796,11 @@ u = u-px.reshape(-1,1);
 v = v-py.reshape(-1,1);
 w = w-pz.reshape(-1,1);
 
+#%%
 
-#%% 
 if timing == 1:
     start_time = time.time()
-    
+
 for i in range(nsteps):
 
 ############ ThreeDChannel_AdjustTimeStep function ############################
@@ -810,8 +822,9 @@ for i in range(nsteps):
     
     if tstepopt == 1:
         dt = dt/(Comax/CoTarget)
-        
-############ ThreeDChannel_Solver function ############################
+
+     
+############ ThreeDChannel_Solver function ####################################
         
 #-----------------------------------------------------------------------------#
 # Incompressible Navier-Stokes solver
@@ -831,7 +844,8 @@ for i in range(nsteps):
     uk = np.zeros((N1*N2*(N3-2),s))
     vk = np.zeros((N1*N2*(N3-2),s))
     wk = np.zeros((N1*N2*(N3-2),s))
-    
+
+
     for ii in range(s):
     
     # In the RK-loop, Uold is the velocity field obtained in the last iteration. 
@@ -846,9 +860,9 @@ for i in range(nsteps):
         if ii >=1:
             for jj in range(s):
                 # Here, the RK formula is used with the given Butcher tableau
-                du = du + a[ii,jj]*uk[:,jj]
-                dv = dv + a[ii,jj]*vk[:,jj]
-                dw = dw + a[ii,jj]*wk[:,jj]
+                du = du + a[ii,jj]*uk[:,jj].reshape(-1,1);
+                dv = dv + a[ii,jj]*vk[:,jj].reshape(-1,1);
+                dw = dw + a[ii,jj]*wk[:,jj].reshape(-1,1);
             
             u = uold + dt*du
             v = vold + dt*dv
@@ -856,8 +870,9 @@ for i in range(nsteps):
             
             # Make pressure field estimate based on previously solved pressures
             
-            u,v,w = projection(Dx,Dy,Dz,M,u,v,w,p,pold,C,Lbicg,Ubicg)
-    
+            ################### Projection step ###################################
+            u,v,w,pold = projection(Dx,Dy,Dz,M,u,v,w,p,pold,C,Lbicg,Ubicg)
+            
         # Begin computing Navier-Stokes contributions
         
         # Convection term (skew-symmetric) - cartesian components
@@ -874,9 +889,9 @@ for i in range(nsteps):
         DIFFz = nu*(Dxx*w + Dyy*w + Dzz*w)
         
         # Implementation into momentum equation
-        uk[:,ii] = -CONVx + DIFFx + gx
-        vk[:,ii] = -CONVy + DIFFy + gy
-        wk[:,ii] = -CONVz + DIFFz + gz
+        uk[:,ii] = (-CONVx + DIFFx + gx).flatten()
+        vk[:,ii] = (-CONVy + DIFFy + gy).flatten()
+        wk[:,ii] = (-CONVz + DIFFz + gz).flatten()
                      
         # End computing contributions
         # [du dv dw]^T are the k_i slope
@@ -884,16 +899,16 @@ for i in range(nsteps):
         # Contribution of step i is added to the collective contribution
         # via coefficients defined by vector b
         
-        uc = uc + dt*b[ii]*uk[:,ii]
-        vc = vc + dt*b[ii]*vk[:,ii]
-        wc = wc + dt*b[ii]*wk[:,ii]
+        uc = uc + dt*b[ii]*uk[:,ii].reshape(-1,1);
+        vc = vc + dt*b[ii]*vk[:,ii].reshape(-1,1);
+        wc = wc + dt*b[ii]*wk[:,ii].reshape(-1,1);
         
         # on final loop
         if ii == s:
             u = uc; v = vc; w = wc
-    
+
     # carry out final projection
-    u,v,w = projection(Dx,Dy,Dz,M,u,v,w,p,pold,C,Lbicg,Ubicg)
+    u,v,w,pold = projection(Dx,Dy,Dz,M,u,v,w,p,pold,C,Lbicg,Ubicg)
     
     U = np.reshape(u,[N1,N2,N3-2],order='F')
     V = np.reshape(v,[N1,N2,N3-2],order='F')
@@ -905,126 +920,19 @@ for i in range(nsteps):
     
     Co = Cox+Coy+Coz
     Comax = np.max(Co)
+    
+    print('n = ', i, 'dt = ', dt, 'Comax = ', Comax)
 
 if timing == 1:
     end_time = time.time()
 
-#%%
-############ ThreeDChannel_AdjustTimeStep function ############################
+print('Elapsed time is ', end_time - start_time, ' Seconds')
+
+if runmode == 0:
+    np.savez('field0.npz', U=U, V=V, W=W)
+
+if runmode == 1:
+    np.savez('field1.npz', U=U, V=V, W=W)
     
-#-----------------------------------------------------------------------------#
-# Here, Courant numbers in three cartesian directions are sensed, and the
-# new time step is adjusted accordingly
-#-----------------------------------------------------------------------------#
-    
-Cox = U*dt/FX[:,:,1:N3-1]
-Coy = V*dt/FY[:,:,1:N3-1]
-Coz = W*dt/FZ[:,:,1:N3-1]
-
-Co = Cox+Coy+Coz
-Comax = np.max(Co)
-
-if tstepopt == 0:
-    dt = setdt
-
-if tstepopt == 1:
-    dt = dt/(Comax/CoTarget)
-
-#%%        
-############ ThreeDChannel_Solver function ############################
-        
-#-----------------------------------------------------------------------------#
-# Incompressible Navier-Stokes solver
-#-----------------------------------------------------------------------------#
-        
-# Convert 3D velocity arrays into column vectors
-u = np.reshape(U,[-1,1],order='F')
-v = np.reshape(V,[-1,1],order='F')
-w = np.reshape(W,[-1,1],order='F')
-
-# Store values from previous time step and create arrays for intermediary storage
-uold = u; uc = u
-vold = v; vc = v
-wold = w; wc = w   
-
-# Define the slope vectors (k)
-uk = np.zeros((N1*N2*(N3-2),s))
-vk = np.zeros((N1*N2*(N3-2),s))
-wk = np.zeros((N1*N2*(N3-2),s))
-
-#%%
-for ii in range(s):
-
-# In the RK-loop, Uold is the velocity field obtained in the last iteration. 
-# Uc is the velocity field that is collated for the next time step.
-
-# Compute state ii according to the Runge-Kutta formula
-    
-    du = np.zeros((N1*N2*(N3-2),1))
-    dv = np.zeros((N1*N2*(N3-2),1))
-    dw = np.zeros((N1*N2*(N3-2),1))
-    
-    if ii >=1:
-        for jj in range(s):
-            # Here, the RK formula is used with the given Butcher tableau
-            du = du + a[ii,jj]*uk[:,jj].reshape(-1,1);
-            dv = dv + a[ii,jj]*vk[:,jj].reshape(-1,1);
-            dw = dw + a[ii,jj]*wk[:,jj].reshape(-1,1);
-        
-        u = uold + dt*du
-        v = vold + dt*dv
-        w = wold + dt*dw
-        
-        # Make pressure field estimate based on previously solved pressures
-        
-        ################### Projection step ###################################
-        u,v,w = projection(Dx,Dy,Dz,M,u,v,w,p,pold,C,Lbicg,Ubicg)
-        
-    # Begin computing Navier-Stokes contributions
-    
-    # Convection term (skew-symmetric) - cartesian components
-    # Note: Neumann BC operator Dzp is used for velocity product differentiation 
-    # across the channel wall
-    
-    CONVx = 0.5*(Dx*(u*u) + Dy*(v*u) + Dzp*(w*u) + u*(Dx*u) + v*(Dy*u) + w*(Dz*u))
-    CONVy = 0.5*(Dx*(u*v) + Dy*(v*v) + Dzp*(w*v) + u*(Dx*v) + v*(Dy*v) + w*(Dz*v))
-    CONVz = 0.5*(Dx*(u*w) + Dy*(v*w) + Dzp*(w*w) + u*(Dx*w) + v*(Dy*w) + w*(Dz*w))     
-    
-    # Diffusion term - cartesian components
-    DIFFx = nu*(Dxx*u + Dyy*u + Dzz*u)
-    DIFFy = nu*(Dxx*v + Dyy*v + Dzz*v)
-    DIFFz = nu*(Dxx*w + Dyy*w + Dzz*w)
-    
-    # Implementation into momentum equation
-    uk[:,ii] = (-CONVx + DIFFx + gx).flatten()
-    vk[:,ii] = (-CONVy + DIFFy + gy).flatten()
-    wk[:,ii] = (-CONVz + DIFFz + gz).flatten()
-                 
-    # End computing contributions
-    # [du dv dw]^T are the k_i slope
-    
-    # Contribution of step i is added to the collective contribution
-    # via coefficients defined by vector b
-    
-    uc = uc + dt*b[ii]*uk[:,ii].reshape(-1,1);
-    vc = vc + dt*b[ii]*vk[:,ii].reshape(-1,1);
-    wc = wc + dt*b[ii]*wk[:,ii].reshape(-1,1);
-    
-    # on final loop
-    if ii == s:
-        u = uc; v = vc; w = wc
-
-#%%
-# carry out final projection
-u,v,w = projection(Dx,Dy,Dz,M,u,v,w,p,pold,C,Lbicg,Ubicg)
-
-U = np.reshape(u,[N1,N2,N3-2],order='F')
-V = np.reshape(v,[N1,N2,N3-2],order='F')
-W = np.reshape(w,[N1,N2,N3-2],order='F')
-
-Cox = U*dt/FX[:,:,1:N3-1]
-Coy = V*dt/FY[:,:,1:N3-1]
-Coz = W*dt/FZ[:,:,1:N3-1]
-
-Co = Cox+Coy+Coz
-Comax = np.max(Co)
+if runmode == 2:
+    np.savez('field2.npz', U=U, V=V, W=W)           
