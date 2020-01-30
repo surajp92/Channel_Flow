@@ -16,6 +16,17 @@ import time
 from numba import jit
 
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+from mpl_toolkits.mplot3d import Axes3D
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+font = {'family' : 'Times New Roman',
+        'size'   : 14}    
+plt.rc('font', **font)
+
+import matplotlib as mpl
+mpl.rcParams['text.usetex'] = True
+mpl.rcParams['text.latex.preamble'] = [r'\usepackage{amsmath}']
 
 #%%
 
@@ -818,6 +829,7 @@ v = v-py.reshape(-1,1);
 w = w-pz.reshape(-1,1);
 
 #%%
+t = 0
 
 if timing == 1:
     start_time = time.time()
@@ -894,23 +906,6 @@ for i in range(nsteps):
             ################### Projection step ###################################
             u,v,w,pold = projection(Dx,Dy,Dz,M,u,v,w,p,pold)#,C,Lbicg,Ubicg)
             
-#            DIV = Dx*u+Dy*v+Dz*w
-#
-#            #[p,flag] = bicgstab(M,DIV,pold,bicgtol,bicgmaxit)
-#            [p,flag] = bicgstab(M,DIV)
-#            
-#            pold = p;
-#            
-#            # Compute pressure gradient
-#            px = Dxp*p;
-#            py = Dyp*p;
-#            pz = Dzp*p;
-#            
-#            # Correct velocity field (vectors) with pressure gradient
-#            u = u-px.reshape(-1,1);
-#            v = v-py.reshape(-1,1);
-#            w = w-pz.reshape(-1,1);
-            
         # Begin computing Navier-Stokes contributions
         
         # Convection term (skew-symmetric) - cartesian components
@@ -961,13 +956,499 @@ for i in range(nsteps):
     
     print('n = ', i, 'dt = ', dt, 'Comax = ', Comax)
 
+#%%
+
+############## ThreeDChannel_RunPostProcessing step ###########################
+
+    if i%interval == 0:
+    
+############## ThreeDChannel_Analyze_Fluctuations_Compact step ################
+        
+        # statistical boundary layer analysis
+        y1 = np.linspace(0,N1-1,N1,dtype = int)
+        x1 = np.linspace(0,N2-1,N2,dtype = int)
+        z1 = np.linspace(0,int(N3/2)-2,int(N3/2)-1,dtype = int)
+        
+        y2 = np.linspace(0,N1-1,N1,dtype = int)
+        x2 = np.linspace(0,N2-1,N2,dtype = int)
+        z2 = np.linspace(int(N3/2)-1,N3-3,int(N3/2)-1,dtype = int)
+        
+        
+        #ut1 = (nu*np.abs(U[y1[0]:y1[-1]+1,x1[0]:x1[-1]+1,0])/Z[y1[0]:y1[-1]+1,x1[0]:x1[-1]+1,0])**(0.5)
+        
+        ut1 = (nu*np.abs(U[0:N1,0:N2,0])/Z[0:N1,0:N2,0])**(0.5) # Shear velocity (lower)
+        ut1mean = np.mean(ut1)
+        
+        ut2 = (nu*np.abs(U[0:N1,0:N2,N3-3])/(Height - Z[0:N1,0:N2,N3-3]))**(0.5) # Shear velocity (upper)
+        ut2mean = np.mean(ut2)
+        
+        utmean = 0.5*(ut1mean+ut2mean)
+        
+        uplu1 = U[0:N1,0:N2,0:int(N3/2)-1]/utmean
+        uplu1mean = np.mean(uplu1, axis = 0)
+        uplu1mean = np.mean(uplu1mean, axis = 0)
+        
+        uplu2 = U[0:N1,0:N2,int(N3/2)-1:N3-2]/utmean
+        uplu2 = np.flip(uplu2,2)
+        uplu2mean = np.mean(uplu2, axis = 0)
+        uplu2mean = np.mean(uplu2mean, axis = 0)
+        
+        vplu1 = W[0:N1,0:N2,0:int(N3/2)-1]/utmean # Here, V and W change places
+        vplu1mean = np.mean(vplu1, axis = 0)
+        vplu1mean = np.mean(vplu1mean, axis = 0)
+        
+        vplu2 = -W[0:N1,0:N2,int(N3/2)-1:N3-2]/utmean # velocity away from wall
+        vplu2 = np.flip(vplu2,2)
+        vplu2mean = np.mean(vplu2, axis = 0)
+        vplu2mean = np.mean(vplu2mean, axis = 0)
+        
+        vplu2mean = np.flip(vplu2mean,0)
+        
+        wplu1 = V[0:N1,0:N2,0:int(N3/2)-1]/utmean # boundary distance
+        wplu1mean = np.mean(wplu1, axis = 0)
+        wplu1mean = np.mean(wplu1mean, axis = 0)
+        
+        wplu2 = V[0:N1,0:N2,int(N3/2)-1:N3-2]/utmean
+        wplu2 = np.flip(wplu2,2)
+        wplu2mean = np.mean(wplu2, axis = 0)
+        wplu2mean = np.mean(wplu2mean, axis = 0)
+        
+        yplu1 = (Z[0:N1,0:N2,0:int(N3/2)-1]/nu)*utmean
+        yplu1mean = np.mean(yplu1, axis = 0)
+        yplu1mean = np.mean(yplu1mean, axis = 0)
+        
+        yplu2 = ((Height - Z[0:N1,0:N2,int(N3/2)-1:N3-2])/nu)*utmean
+        yplu2 = np.flip(yplu2,2)
+        yplu2mean = np.mean(yplu2, axis = 0)
+        yplu2mean = np.mean(yplu2mean, axis = 0)
+        
+        uplumean = 0.5*(uplu1mean + uplu2mean)
+        vplumean = 0.5*(vplu1mean + vplu2mean)
+        wplumean = 0.5*(wplu1mean + wplu2mean)
+        yplumean = 0.5*(yplu1mean + yplu2mean)
+        
+        utmean = np.reshape(utmean,[1,1])
+        uplumean = np.reshape(uplumean,[int(N3/2)-1,1])
+        vplumean = np.reshape(vplumean,[int(N3/2)-1,1])
+        wplumean = np.reshape(wplumean,[int(N3/2)-1,1])
+        yplumean = np.reshape(yplumean,[int(N3/2)-1,1])
+        
+        # Begin averaging from 1st interval, and fluctuations from "statinit"
+        if i == interval:
+            uutmean = utmean;
+            uuplumean = uplumean;
+            vvplumean = vplumean;
+            wwplumean = wplumean;
+            yyplumean = yplumean;
+            taveuplumean = uplumean;
+            tavevplumean = vplumean;
+            tavewplumean = wplumean;
+            taveyplumean = yplumean;
+        
+        if i > interval:
+            uutmean = np.concatenate((uutmean, utmean), axis = 1);
+            uuplumean = np.concatenate((uuplumean,uplumean), axis = 1);
+            vvplumean = np.concatenate((vvplumean,vplumean), axis = 1);
+            wwplumean = np.concatenate((wwplumean,wplumean), axis = 1);
+            yyplumean = np.concatenate((yyplumean,yplumean), axis = 1);
+            taveuutmean = np.mean(uutmean, axis = 1);
+            taveuplumean = np.mean(uuplumean, axis = 1);
+            tavevplumean = np.mean(vvplumean, axis = 1);
+            tavewplumean = np.mean(wwplumean, axis = 1);
+            taveyplumean = np.mean(yyplumean, axis = 1);
+        
+        matuplumean = np.zeros((N1,N2,int(N3/2)-1))
+        matvplumean = np.zeros((N1,N2,int(N3/2)-1))
+        matwplumean = np.zeros((N1,N2,int(N3/2)-1))
+        
+        matuplumean[:,:,:] = taveuplumean
+        matvplumean[:,:,:] = tavevplumean
+        matwplumean[:,:,:] = tavewplumean
+        
+        # Compute fluctuations by using instantaneous values and
+        # constantly evolving averages. Average fluctuations over samples.
+        # For diagonal Reynolds stresses, compute RMS of fluctuation.
+        # For off-diagonal, compute mean of fluctuation stress component
+        # product.
+        
+        # u fluctuations
+        ufluc1 = uplu1 - matuplumean
+        ufluc2 = uplu2 - matuplumean
+        
+        ufluc1sq = ufluc1*ufluc1
+        ufluc2sq = ufluc2*ufluc2
+        uflucsq = 0.5*(ufluc1sq + ufluc2sq)
+        
+        uflucsq = np.mean(uflucsq, axis = 0)
+        uflucsq = np.mean(uflucsq, axis = 0)
+        uflucsq = np.reshape(uflucsq,[-1,1])
+        
+        if i == interval*statinit:
+            uufluc = uflucsq;
+            uplurms = uflucsq**(0.5);
+            uplurms = np.reshape(uplurms,[int(N3/2)-1,1]);
+        
+        if i > interval*statinit:
+            uufluc = np.concatenate((uufluc,uflucsq), axis = 1)
+            uplurms = np.mean(uufluc, axis = 1)
+            uplurms = uplurms**(0.5)
+            uplurms = np.reshape(uplurms,[int(N3/2)-1,1])
+        
+        # v fluctuations
+        vfluc1 = vplu1 - matvplumean
+        vfluc2 = vplu2 - matvplumean
+        
+        vfluc1sq = vfluc1*vfluc1
+        vfluc2sq = vfluc2*vfluc2
+        vflucsq = 0.5*(vfluc1sq + vfluc2sq)
+        
+        vflucsq = np.mean(vflucsq, axis = 0)
+        vflucsq = np.mean(vflucsq, axis = 0)
+        vflucsq = np.reshape(vflucsq,[-1,1])
+        
+        if i == interval*statinit:
+            vvfluc = vflucsq;
+            vplurms = vflucsq**(0.5);
+            vplurms = np.reshape(vplurms,[int(N3/2)-1,1]);
+        
+        if i > interval*statinit:
+            vvfluc = np.concatenate((vvfluc,vflucsq), axis = 1)
+            vplurms = np.mean(vvfluc, axis = 1)
+            vplurms = vplurms**(0.5)
+            vplurms = np.reshape(vplurms,[int(N3/2)-1,1])
+        
+        # w fluctuations
+        wfluc1 = wplu1 - matwplumean
+        wfluc2 = wplu2 - matwplumean
+        
+        wfluc1sq = wfluc1*wfluc1
+        wfluc2sq = wfluc2*wfluc2
+        wflucsq = 0.5*(wfluc1sq + wfluc2sq)
+        
+        wflucsq = np.mean(wflucsq, axis = 0)
+        wflucsq = np.mean(wflucsq, axis = 0)
+        wflucsq = np.reshape(wflucsq,[-1,1])
+        
+        if i == interval*statinit:
+            wwfluc = wflucsq;
+            wplurms = wflucsq**(0.5);
+            wplurms = np.reshape(wplurms,[int(N3/2)-1,1]);
+        
+        if i > interval*statinit:
+            wwfluc = np.concatenate((wwfluc,wflucsq), axis = 1)
+            wplurms = np.mean(wwfluc, axis = 1)
+            wplurms = wplurms**(0.5)
+            wplurms = np.reshape(wplurms,[int(N3/2)-1,1])
+        
+        uvfluc1 = uplu1*vplu1 - matuplumean*matvplumean
+        uvfluc2 = uplu2*vplu2 - matuplumean*matvplumean
+        uvfluc = 0.5*(uvfluc1 + uvfluc2)
+        
+        uvfluc = np.mean(uvfluc, axis = 0)
+        uvfluc = np.mean(uvfluc, axis = 0)
+        uvfluc = np.reshape(uvfluc,[-1,1])
+        
+        if i == interval*statinit:
+            uuvvfluc = uvfluc
+            uupluvvplumean = uvfluc
+            uupluvvplumean = np.reshape(uupluvvplumean,[int(N3/2)-1,1])
+            
+        if i > interval*statinit:
+            uuvvfluc = np.concatenate((uuvvfluc,uvfluc), axis = 1)
+            uupluvvplumean = np.mean(uuvvfluc, axis = 1)
+            uupluvvplumean = np.reshape(uupluvvplumean,[int(N3/2)-1,1])
+        
+        uwfluc1 = uplu1*wplu1 - matuplumean*matwplumean
+        uwfluc2 = uplu2*wplu2 - matuplumean*matwplumean
+        uwfluc = 0.5*(uwfluc1 + uwfluc2)
+        
+        uwfluc = np.mean(uwfluc, axis = 0)
+        uwfluc = np.mean(uwfluc, axis = 0)
+        uwfluc = np.reshape(uwfluc,[-1,1])
+        
+        if i == interval*statinit:
+            uuwwfluc = uwfluc
+            uupluwwplumean = uwfluc
+            uupluwwplumean = np.reshape(uupluwwplumean,[int(N3/2)-1,1])
+            
+        if i > interval*statinit:
+            uuwwfluc = np.concatenate((uuwwfluc,uwfluc), axis = 1)
+            uupluwwplumean = np.mean(uuwwfluc, axis= 1)
+            uupluwwplumean = np.reshape(uupluwwplumean,[int(N3/2)-1,1])
+        
+        vwfluc1 = vplu1*wplu1 - matvplumean*matwplumean
+        vwfluc2 = vplu2*wplu2 - matvplumean*matwplumean
+        vwfluc = 0.5*(vwfluc1+vwfluc2)
+        
+        vwfluc = np.mean(vwfluc, axis = 0)
+        vwfluc = np.mean(vwfluc, axis = 0)
+        vwfluc = np.reshape(vwfluc,[-1,1])
+        
+        if i == interval*statinit:
+            vvwwfluc = vwfluc
+            vvpluwwplumean = vwfluc
+            vvpluwwplumean = np.reshape(vvpluwwplumean,[int(N3/2)-1,1])
+        
+        if i > interval*statinit:
+            vvwwfluc = np.concatenate((vvwwfluc,vwfluc), axis = 1)
+            vvpluwwplumean = np.mean(vvwwfluc, axis = 1)
+            vvpluwwplumean = np.reshape(vvpluwwplumean,[int(N3/2)-1,1])
+        
+        # For post-processing
+        uplumean = np.reshape(taveuplumean,[int(N3/2)-1,1])
+        
+        if i > interval*statinit:
+            
+            uflu = np.concatenate((uplu1, np.flip(uplu2, axis=2)), axis=2)*utmean - \
+                   np.concatenate((matuplumean, np.flip(matuplumean, axis=2)), axis=2)
+            
+            vflu = np.concatenate((vplu1, np.flip(vplu2, axis=2)), axis=2)*utmean - \
+                   np.concatenate((matvplumean, np.flip(matvplumean, axis=2)), axis=2)
+                  
+            wflu = np.concatenate((wplu1, np.flip(wplu2, axis=2)), axis=2)*utmean - \
+                   np.concatenate((matwplumean, np.flip(matwplumean, axis=2)), axis=2)
+            
+            # compute fluctuations derivative
+            
+            dufdx = Dx*np.reshape(uflu,[N1*N2*(N3-2),1],order='F')
+            dvfdx = Dx*np.reshape(vflu,[N1*N2*(N3-2),1],order='F')
+            dwfdx = Dx*np.reshape(wflu,[N1*N2*(N3-2),1],order='F')
+            dufdy = Dy*np.reshape(uflu,[N1*N2*(N3-2),1],order='F')
+            dvfdy = Dy*np.reshape(vflu,[N1*N2*(N3-2),1],order='F')
+            dwfdy = Dy*np.reshape(wflu,[N1*N2*(N3-2),1],order='F')
+            dufdz = Dz*np.reshape(uflu,[N1*N2*(N3-2),1],order='F')
+            dvfdz = Dz*np.reshape(vflu,[N1*N2*(N3-2),1],order='F')
+            dwfdz = Dz*np.reshape(wflu,[N1*N2*(N3-2),1],order='F')
+        
+            AIJAIJ = dufdx**2 + dvfdx**2 + dwfdx**2 + \
+                     dufdy**2 + dvfdy**2 + dwfdy**2 + \
+                     dufdz**2 + dvfdz**2 + dwfdz**2
+            
+            AIJBIJ = dufdx**2 + dvfdx*dufdy + dwfdx*dufdz + \
+                     dufdy*dvfdx + dvfdy**2 + dwfdy*dvfdz + \
+                     dufdz*dwfdx + dvfdz*dwfdy + dwfdz**2
+            
+            TD = nu*(AIJAIJ + AIJBIJ)
+            
+            TDcut = np.reshape(TD,[N1,N2,N3-2],order='F')
+            TDcut = TDcut[int(N1/2)-1,:,:]
+            TDcut = np.reshape(TDcut,[N2,N3-2],order='F')
+            TDcut = TDcut.T
+        
+################# ThreeDChannel_ComputeQCriterion step ########################
+
+#-----------------------------------------------------------------------------#
+# This script computes the Q criterion for visualization of turbulent structures
+#-----------------------------------------------------------------------------#
+            
+        dudx = Dx*np.reshape(U,[-1,1],order='F')
+        dudy = Dy*np.reshape(U,[-1,1],order='F')
+        dudz = Dz*np.reshape(U,[-1,1],order='F')
+        
+        dvdx = Dx*np.reshape(V,[-1,1],order='F')
+        dvdy = Dy*np.reshape(V,[-1,1],order='F')
+        dvdz = Dz*np.reshape(V,[-1,1],order='F')
+        
+        dwdx = Dx*np.reshape(W,[-1,1],order='F')
+        dwdy = Dy*np.reshape(W,[-1,1],order='F')
+        dwdz = Dz*np.reshape(W,[-1,1],order='F')
+        
+        S2 =  dudx**2 + (0.5*(dudy+dvdx))**2 + (0.5*(dudz+dwdx))**2 + \
+              (0.5*(dvdx+dudy))**2 + dvdy**2 + (0.5*(dvdz+dwdy))**2 + \
+              (0.5*(dwdx+dudz))**2 + (0.5*(dwdy+dvdz))**2 + dwdz**2
+        
+        OM2 = 0 + (0.5*(dudy-dvdx))**2 + (0.5*(dudz-dwdx))**2 + \
+              (0.5*(dvdx-dudy))**2 + 0 + (0.5*(dudz-dwdy))**2 + \
+              (0.5*(dwdx-dudz))**2 + (0.5*(dwdy-dvdz))**2 + 0
+              
+        Q = -0.5*(S2-OM2)
+        
+        Q = np.reshape(Q,[N1,N2,N3-2],order='F')
+        
+        
+################# ThreeDChannel_Process_Fields step ###########################
+
+#-----------------------------------------------------------------------------#
+# Field post-processing for visualization
+#-----------------------------------------------------------------------------# 
+        
+        Vmag = np.sqrt(U**2 + V**2 +W**2) 
+        
+        yplusall = 0.5*FZ[:,:,0]*np.sqrt(U[:,:,0]/(0.5*FZ[:,:,0]))/np.sqrt(nu)
+        
+        DUDZ = Dz*np.reshape(U,[-1,1],order='F')
+        
+        UTAU1 = np.sqrt(nu*np.abs(U[:,:,0])/Z[:,:,0])
+        UTAU2 = np.sqrt(nu*np.abs(U[:,:,N3-3])/(Height - Z[:,:,N3-3]))
+        RTAU1 = UTAU1*(0.5*Height)/nu
+        RTAU2 = UTAU2*(0.5*Height)/nu
+        RTAUAVG = 0.5*(RTAU1 + RTAU2)
+        RTAUAVG = np.mean(RTAUAVG)
+        
+        if i == interval:
+            rtau = RTAUAVG
+        else:
+            rtau = np.vstack(rtau,RTAUAVG)
+        
+        # make slice for 2D interpretations
+        
+        Uslice = U[int(N1/2),:,:]
+        Uslice = np.reshape(Uslice,[N2,N3-2],order='F')
+        Uslice = Uslice.T
+        
+        Uslice2 = U[:,:,yplane-1]
+        Uslice2 = np.reshape(Uslice2,[N1,N2],order='F')
+        
+        Uslice3 = U[:,int(N2/4),:]
+        Uslice3 = np.reshape(Uslice3,[N1,N3-2],order='F')
+        Uslice3 = Uslice3.T
+    
+        Uslice4 = U[:,int(3*N2/4),:]
+        Uslice4 = np.reshape(Uslice4,[N1,N3-2],order='F')
+        Uslice4 = Uslice4.T
+    
+        Wslice = W[int(N1/2),:,:]
+        Wslice = np.reshape(Wslice,[N2,N3-2],order='F')
+        Wslice = Wslice.T
+    
+        RT = (1/np.sqrt(nu))*(2/Height)*yplusall/FZ[:,:,1]    
+        
+        E = np.sum(Vmag[inx[0]:inx[-1]+1,iny[0]:iny[-1]+1,inz[0]-1:inz[-1]]**2 * \
+            FX[inx[0]:inx[-1]+1,iny[0]:iny[-1]+1,inz[0]:inz[-1]+1] * \
+            FY[inx[0]:inx[-1]+1,iny[0]:iny[-1]+1,inz[0]:inz[-1]+1] * \
+            FZ[inx[0]:inx[-1]+1,iny[0]:iny[-1]+1,inz[0]:inz[-1]+1])
+        
+        HGX = 0.5*Height*gx
+        NDZ = nu*DUDZ[0,0]
+        
+        MU = np.mean(U)
+        
+        if i == interval:
+            e = E
+            T = t
+            hgx = HGX
+            ndz = NDZ
+        else:
+            e = np.vstack((e,E))
+            T = np.vstack((T,t))
+            hgx = np.vstack((hgx, HGX))
+            ndz = np.vstack((ndz, NDZ))
+            
+        XQ = X[:,:,0:int(N3/2)-1]
+        YQ = Y[:,:,0:int(N3/2)-1]
+        ZQ = Z[:,:,0:int(N3/2)-1]
+        QQ = Q[:,:,0:int(N3/2)-1]
+        VmagQ = Vmag[:,:,0:int(N3/2)-1]    
+        
+        
+################# ThreeDChannel_Visualize step ################################
+
+#-----------------------------------------------------------------------------#
+# Visualization scripts
+#-----------------------------------------------------------------------------#  
+        if frame >= 2:
+            # plot 1 (line plots)
+            if plo11 == 1:
+                fig, ax = plt.subplots(nrows=2,ncols=2,figsize=(10,7))
+                ax = ax.flat
+                
+                ax[0].semilogx(yplumean[:,0], uplumean[:,0],'o',markerfacecolor='black', \
+                               markeredgecolor='black', label = 'Python')
+                ax[0].semilogx(MSRyplus,MSRUmean,'o',markerfacecolor='none', \
+                               markeredgecolor='black', lable = 'Reference (MKM, 1999)')
+                ax[0].set_xlim([np.min(yplumean), np.max(yplumean)])
+                ax[0].legend()
+                
+                ax[1].semilogx(yplumean[:,0], uplurms,'o',markerfacecolor='black', \
+                               markeredgecolor='black', label = '$u^{+}$')
+                ax[1].semilogx(yplumean[:,0], vplurms,'o',markerfacecolor='red', \
+                               markeredgecolor='red', label = '$v^{+}$')
+                ax[1].semilogx(yplumean[:,0], wplurms,'o',markerfacecolor='blue', \
+                               markeredgecolor='blue', label = '$w^{+}$')
+                
+                ax[1].semilogx(MSRflucyplus,MSRflucuplus,'o',markerfacecolor='none', \
+                               markeredgecolor='black', lable = '$u^{+}$ (MKM, 1999)')
+                ax[1].semilogx(MSRflucyplus,MSRflucvplus,'o',markerfacecolor='none', \
+                               markeredgecolor='red', lable = '$v^{+}$ (MKM, 1999)')
+                ax[1].semilogx(MSRflucyplus,MSRflucwplus,'o',markerfacecolor='none', \
+                               markeredgecolor='blue', lable = '$w^{+}$ (MKM, 1999)')
+                
+                ax[1].set_xlim([np.min(yplumean), np.max(yplumean)])
+                ax[1].legend()
+                
+                ax[2].semilogx(yplumean[:,0], uupluvvplumean,'o',markerfacecolor='black', \
+                               markeredgecolor='black', label = '$u^{+}v^{+}$')
+                ax[2].semilogx(MSRflucyplus,MSRflucuvplus,'o',markerfacecolor='none', \
+                               markeredgecolor='black', lable = '$u^{+}v^{+}$ (MKM, 1999)')
+                
+                ax[2].set_xlim([np.min(yplumean), np.max(yplumean)])
+                ax[2].legend()
+                
+                ax[3].plot(T,rtau, color='blue')
+                ax[3].set_xlabel('t')
+                ax[3].set_ylabel('$\text{Re}_{\tau}$', color='blue')
+                ax[3].tick_params(axis='y', labelcolor='blue')
+                
+                ax2 = ax[3].twinx()  # instantiate a second axes that shares the same x-axis
+                ax2.plot(T,e, color='red')
+                ax2.set_xlabel('t')
+                ax2.set_ylabel('E', color='red')
+                ax2.tick_params(axis='y', labelcolor='red')
+                
+                fig.tight_layout()
+                plt.show()
+                #fig.savefig(filename)
+            
+            #plot 2 (contour plot)
+            if plo12 == 2:
+                fig = plt.figure(tight_layout=True, figsize=(10,7))
+                gs = gridspec.GridSpec(3, 2)
+                
+                ax = fig.add_subplot(gs[0, :])
+                cs = ax.contour(x,z[1:N3-1],Uslice, 20, cmap = 'jet')
+                fig.colorbar(cs, orientation='vertical', fraction=0.15, aspect=5)
+                ax.set_xlabel('x')
+                ax.set_ylabel('y')
+                ax.set_title('Streamwise velocity, XY-plane')
+                
+                ax = fig.add_subplot(gs[1, :])
+                cs = ax.contour(x,y,Uslice2, 20, cmap = 'jet')
+                fig.colorbar(cs, orientation='vertical', fraction=0.15, aspect=5)
+                ax.set_xlabel('x')
+                ax.set_ylabel('z')
+                ax.set_title('Streamwise velocity, XZ-plane + $\text{y}^{+} = $'+ \
+                             str(yplumean[yplane]))
+                
+                
+                ax = fig.add_subplot(gs[1, 0])
+                cs = ax.contour(x,z[1:N3-1],Uslice3, 20, cmap = 'jet')
+                #fig.colorbar(cs, orientation='vertical', fraction=0.15, aspect=5)
+                ax.set_xlabel('z')
+                ax.set_ylabel('y')
+                ax.set_title('Streamwise velocity, ZY-plane 1')
+                
+                ax = fig.add_subplot(gs[1, 1])
+                cs = ax.contour(x,z[1:N3-1],Uslice4, 20, cmap = 'jet')
+                #fig.colorbar(cs, orientation='vertical', fraction=0.15, aspect=5)
+                ax.set_xlabel('z')
+                ax.set_ylabel('y')
+                ax.set_title('Streamwise velocity, ZY-plane 2')
+            
+            if plot3 == 3:
+                
+                
+        
+        frame = frame + 1
+            
+    
+t = t + dt        
+
 if timing == 1:
     end_time = time.time()
 
 print('Elapsed time is ', end_time - start_time, ' Seconds')
 
 #%%
-
 if runmode == 0:
     np.savez('field0.npz', U=U, V=V, W=W)
 
@@ -983,281 +1464,44 @@ V = Fields1.get('V')
 W = Fields1.get('W')
 
 #%%
+import matplotlib.pyplot as plt
+import numpy as np
+import matplotlib.gridspec as gridspec
 
-############## ThreeDChannel_Analyze_Fluctuations_Compact step ################
-
-if i%interval == 0:
-
-    # statistical boundary layer analysis
-    y1 = np.linspace(0,N1-1,N1,dtype = int)
-    x1 = np.linspace(0,N2-1,N2,dtype = int)
-    z1 = np.linspace(0,int(N3/2)-2,int(N3/2)-1,dtype = int)
-    
-    y2 = np.linspace(0,N1-1,N1,dtype = int)
-    x2 = np.linspace(0,N2-1,N2,dtype = int)
-    z2 = np.linspace(int(N3/2)-1,N3-3,int(N3/2)-1,dtype = int)
-    
-    
-    #ut1 = (nu*np.abs(U[y1[0]:y1[-1]+1,x1[0]:x1[-1]+1,0])/Z[y1[0]:y1[-1]+1,x1[0]:x1[-1]+1,0])**(0.5)
-    
-    ut1 = (nu*np.abs(U[0:N1,0:N2,0])/Z[0:N1,0:N2,0])**(0.5) # Shear velocity (lower)
-    ut1mean = np.mean(ut1)
-    
-    ut2 = (nu*np.abs(U[0:N1,0:N2,N3-3])/(Height - Z[0:N1,0:N2,N3-3]))**(0.5) # Shear velocity (upper)
-    ut2mean = np.mean(ut2)
-    
-    utmean = 0.5*(ut1mean+ut2mean)
-    
-    uplu1 = U[0:N1,0:N2,0:int(N3/2)-1]/utmean
-    uplu1mean = np.mean(uplu1, axis = 0)
-    uplu1mean = np.mean(uplu1mean, axis = 0)
-    
-    uplu2 = U[0:N1,0:N2,int(N3/2)-1:N3-2]/utmean
-    uplu2 = np.flip(uplu2,2)
-    uplu2mean = np.mean(uplu2, axis = 0)
-    uplu2mean = np.mean(uplu2mean, axis = 0)
-    
-    vplu1 = W[0:N1,0:N2,0:int(N3/2)-1]/utmean # Here, V and W change places
-    vplu1mean = np.mean(vplu1, axis = 0)
-    vplu1mean = np.mean(vplu1mean, axis = 0)
-    
-    vplu2 = -W[0:N1,0:N2,int(N3/2)-1:N3-2]/utmean # velocity away from wall
-    vplu2 = np.flip(vplu2,2)
-    vplu2mean = np.mean(vplu2, axis = 0)
-    vplu2mean = np.mean(vplu2mean, axis = 0)
-    
-    vplu2mean = np.flip(vplu2mean,0)
-    
-    wplu1 = V[0:N1,0:N2,0:int(N3/2)-1]/utmean # boundary distance
-    wplu1mean = np.mean(wplu1, axis = 0)
-    wplu1mean = np.mean(wplu1mean, axis = 0)
-    
-    wplu2 = V[0:N1,0:N2,int(N3/2)-1:N3-2]/utmean
-    wplu2 = np.flip(wplu2,2)
-    wplu2mean = np.mean(wplu2, axis = 0)
-    wplu2mean = np.mean(wplu2mean, axis = 0)
-    
-    yplu1 = (Z[0:N1,0:N2,0:int(N3/2)-1]/nu)*utmean
-    yplu1mean = np.mean(yplu1, axis = 0)
-    yplu1mean = np.mean(yplu1mean, axis = 0)
-    
-    yplu2 = ((Height - Z[0:N1,0:N2,int(N3/2)-1:N3-2])/nu)*utmean
-    yplu2 = np.flip(yplu2,2)
-    yplu2mean = np.mean(yplu2, axis = 0)
-    yplu2mean = np.mean(yplu2mean, axis = 0)
-    
-    uplumean = 0.5*(uplu1mean + uplu2mean)
-    vplumean = 0.5*(vplu1mean + vplu2mean)
-    wplumean = 0.5*(wplu1mean + wplu2mean)
-    yplumean = 0.5*(yplu1mean + yplu2mean)
-    
-    utmean = np.reshape(utmean,[1,1])
-    uplumean = np.reshape(uplumean,[int(N3/2)-1,1])
-    vplumean = np.reshape(vplumean,[int(N3/2)-1,1])
-    wplumean = np.reshape(wplumean,[int(N3/2)-1,1])
-    yplumean = np.reshape(yplumean,[int(N3/2)-1,1])
-    
-    # Begin averaging from 1st interval, and fluctuations from "statinit"
-    if i == interval:
-        uutmean = utmean;
-        uuplumean = uplumean;
-        vvplumean = vplumean;
-        wwplumean = wplumean;
-        yyplumean = yplumean;
-        taveuplumean = uplumean;
-        tavevplumean = vplumean;
-        tavewplumean = wplumean;
-        taveyplumean = yplumean;
-    
-    if i > interval:
-        uutmean = np.concatenate((uutmean, utmean), axis = 1);
-        uuplumean = np.concatenate((uuplumean,uplumean), axis = 1);
-        vvplumean = np.concatenate((vvplumean,vplumean), axis = 1);
-        wwplumean = np.concatenate((wwplumean,wplumean), axis = 1);
-        yyplumean = np.concatenate((yyplumean,yplumean), axis = 1);
-        taveuutmean = np.mean(uutmean, axis = 1);
-        taveuplumean = np.mean(uuplumean, axis = 1);
-        tavevplumean = np.mean(vvplumean, axis = 1);
-        tavewplumean = np.mean(wwplumean, axis = 1);
-        taveyplumean = np.mean(yyplumean, axis = 1);
-    
-    matuplumean = np.zeros((N1,N2,int(N3/2)-1))
-    matvplumean = np.zeros((N1,N2,int(N3/2)-1))
-    matwplumean = np.zeros((N1,N2,int(N3/2)-1))
-    
-    matuplumean[:,:,:] = taveuplumean
-    matvplumean[:,:,:] = tavevplumean
-    matwplumean[:,:,:] = tavewplumean
-    
-    # Compute fluctuations by using instantaneous values and
-    # constantly evolving averages. Average fluctuations over samples.
-    # For diagonal Reynolds stresses, compute RMS of fluctuation.
-    # For off-diagonal, compute mean of fluctuation stress component
-    # product.
-    
-    # u fluctuations
-    ufluc1 = uplu1 - matuplumean
-    ufluc2 = uplu2 - matuplumean
-    
-    ufluc1sq = ufluc1*ufluc1
-    ufluc2sq = ufluc2*ufluc2
-    uflucsq = 0.5*(ufluc1sq + ufluc2sq)
-    
-    uflucsq = np.mean(uflucsq, axis = 0)
-    uflucsq = np.mean(uflucsq, axis = 0)
-    uflucsq = np.reshape(uflucsq,[-1,1])
-    
-    if i == interval*statinit:
-        uufluc = uflucsq;
-        uplurms = uflucsq**(0.5);
-        uplurms = np.reshape(uplurms,[int(N3/2)-1,1]);
-    
-    if i > interval*statinit:
-        uufluc = np.concatenate((uufluc,uflucsq), axis = 1)
-        uplurms = np.mean(uufluc, axis = 1)
-        uplurms = uplurms**(0.5)
-        uplurms = np.reshape(uplurms,[int(N3/2)-1,1])
-    
-    # v fluctuations
-    vfluc1 = vplu1 - matvplumean
-    vfluc2 = vplu2 - matvplumean
-    
-    vfluc1sq = vfluc1*vfluc1
-    vfluc2sq = vfluc2*vfluc2
-    vflucsq = 0.5*(vfluc1sq + vfluc2sq)
-    
-    vflucsq = np.mean(vflucsq, axis = 0)
-    vflucsq = np.mean(vflucsq, axis = 0)
-    vflucsq = np.reshape(vflucsq,[-1,1])
-    
-    if i == interval*statinit:
-        vvfluc = vflucsq;
-        vplurms = vflucsq**(0.5);
-        vplurms = np.reshape(vplurms,[int(N3/2)-1,1]);
-    
-    if i > interval*statinit:
-        vvfluc = np.concatenate((vvfluc,vflucsq), axis = 1)
-        vplurms = np.mean(vvfluc, axis = 1)
-        vplurms = vplurms**(0.5)
-        vplurms = np.reshape(vplurms,[int(N3/2)-1,1])
-    
-    # w fluctuations
-    wfluc1 = wplu1 - matwplumean
-    wfluc2 = wplu2 - matwplumean
-    
-    wfluc1sq = wfluc1*wfluc1
-    wfluc2sq = wfluc2*wfluc2
-    wflucsq = 0.5*(wfluc1sq + wfluc2sq)
-    
-    wflucsq = np.mean(wflucsq, axis = 0)
-    wflucsq = np.mean(wflucsq, axis = 0)
-    wflucsq = np.reshape(wflucsq,[-1,1])
-    
-    if i == interval*statinit:
-        wwfluc = wflucsq;
-        wplurms = wflucsq**(0.5);
-        wplurms = np.reshape(wplurms,[int(N3/2)-1,1]);
-    
-    if i > interval*statinit:
-        wwfluc = np.concatenate((wwfluc,wflucsq), axis = 1)
-        wplurms = np.mean(wwfluc, axis = 1)
-        wplurms = wplurms**(0.5)
-        wplurms = np.reshape(wplurms,[int(N3/2)-1,1])
-    
-    uvfluc1 = uplu1*vplu1 - matuplumean*matvplumean
-    uvfluc2 = uplu2*vplu2 - matuplumean*matvplumean
-    uvfluc = 0.5*(uvfluc1 + uvfluc2)
-    
-    uvfluc = np.mean(uvfluc, axis = 0)
-    uvfluc = np.mean(uvfluc, axis = 0)
-    uvfluc = np.reshape(uvfluc,[-1,1])
-    
-    if i == interval*statinit:
-        uuvvfluc = uvfluc
-        uupluvvplumean = uvfluc
-        uupluvvplumean = np.reshape(uupluvvplumean,[int(N3/2)-1,1])
-        
-    if i > interval*statinit:
-        uuvvfluc = np.concatenate((uuvvfluc,uvfluc), axis = 1)
-        uupluvvplumean = np.mean(uuvvfluc, axis = 1)
-        uupluvvplumean = np.reshape(uupluvvplumean,[int(N3/2)-1,1])
-    
-    uwfluc1 = uplu1*wplu1 - matuplumean*matwplumean
-    uwfluc2 = uplu2*wplu2 - matuplumean*matwplumean
-    uwfluc = 0.5*(uwfluc1 + uwfluc2)
-    
-    uwfluc = np.mean(uwfluc, axis = 0)
-    uwfluc = np.mean(uwfluc, axis = 0)
-    uwfluc = np.reshape(uwfluc,[-1,1])
-    
-    if i == interval*statinit:
-        uuwwfluc = uwfluc
-        uupluwwplumean = uwfluc
-        uupluwwplumean = np.reshape(uupluwwplumean,[int(N3/2)-1,1])
-        
-    if i > interval*statinit:
-        uuwwfluc = np.concatenate((uuwwfluc,uwfluc), axis = 1)
-        uupluwwplumean = np.mean(uuwwfluc, axis= 1)
-        uupluwwplumean = np.reshape(uupluwwplumean,[int(N3/2)-1,1])
-    
-    vwfluc1 = vplu1*wplu1 - matvplumean*matwplumean
-    vwfluc2 = vplu2*wplu2 - matvplumean*matwplumean
-    vwfluc = 0.5*(vwfluc1+vwfluc2)
-    
-    vwfluc = np.mean(vwfluc, axis = 0)
-    vwfluc = np.mean(vwfluc, axis = 0)
-    vwfluc = np.reshape(vwfluc,[-1,1])
-    
-    if i == interval*statinit:
-        vvwwfluc = vwfluc
-        vvpluwwplumean = vwfluc
-        vvpluwwplumean = np.reshape(vvpluwwplumean,[int(N3/2)-1,1])
-    
-    if i > interval*statinit:
-        vvwwfluc = np.concatenate((vvwwfluc,vwfluc), axis = 1)
-        vvpluwwplumean = np.mean(vvwwfluc, axis = 1)
-        vvpluwwplumean = np.reshape(vvpluwwplumean,[int(N3/2)-1,1])
-    
-    # For post-processing
-    uplumean = np.reshape(taveuplumean,[int(N3/2)-1,1])
-    
-    if i > interval*statinit:
-        
-        uflu = np.concatenate((uplu1, np.flip(uplu2, axis=2)), axis=2)*utmean - \
-               np.concatenate((matuplumean, np.flip(matuplumean, axis=2)), axis=2)
-        
-        vflu = np.concatenate((vplu1, np.flip(vplu2, axis=2)), axis=2)*utmean - \
-               np.concatenate((matvplumean, np.flip(matvplumean, axis=2)), axis=2)
-              
-        wflu = np.concatenate((wplu1, np.flip(wplu2, axis=2)), axis=2)*utmean - \
-               np.concatenate((matwplumean, np.flip(matwplumean, axis=2)), axis=2)
-        
-        # compute fluctuations derivative
-        
-        dufdx = Dx*np.reshape(uflu,[N1*N2*(N3-2),1],order='F')
-        dvfdx = Dx*np.reshape(vflu,[N1*N2*(N3-2),1],order='F')
-        dwfdx = Dx*np.reshape(wflu,[N1*N2*(N3-2),1],order='F')
-        dufdy = Dy*np.reshape(uflu,[N1*N2*(N3-2),1],order='F')
-        dvfdy = Dy*np.reshape(vflu,[N1*N2*(N3-2),1],order='F')
-        dwfdy = Dy*np.reshape(wflu,[N1*N2*(N3-2),1],order='F')
-        dufdz = Dz*np.reshape(uflu,[N1*N2*(N3-2),1],order='F')
-        dvfdz = Dz*np.reshape(vflu,[N1*N2*(N3-2),1],order='F')
-        dwfdz = Dz*np.reshape(wflu,[N1*N2*(N3-2),1],order='F')
-    
-        AIJAIJ = dufdx**2 + dvfdx**2 + dwfdx**2 + \
-                 dufdy**2 + dvfdy**2 + dwfdy**2 + \
-                 dufdz**2 + dvfdz**2 + dwfdz**2
-        
-        AIJBIJ = dufdx**2 + dvfdx*dufdy + dwfdx*dufdz + \
-                 dufdy*dvfdx + dvfdy**2 + dwfdy*dvfdz + \
-                 dufdz*dwfdx + dvfdz*dwfdy + dwfdz**2
-        
-        TD = nu*(AIJAIJ + AIJBIJ)
-        
-        TDcut = np.reshape(TD,[N1,N2,N3-2],order='F')
-        TDcut = TDcut[int(N1/2)-1,:,:]
-        TDcut = np.reshape(TDcut,[N2,N3-2],order='F')
-        TDcut = TDcut.T
-    
+a = np.random.rand(6,3)
+x = np.linspace(0,5,6)
+y = np.linspace(0,2,3)
 
 
+fig = plt.figure(tight_layout=True, figsize=(10,7))
+gs = gridspec.GridSpec(3, 2)
+
+ax = fig.add_subplot(gs[0, :])
+#ax.plot(np.arange(0, 1e6, 1000))
+cs = ax.contourf(x,y,a.T, 20, cmap = 'jet')
+#divider = make_axes_locatable(ax)
+#cax = divider.append_axes("right", size="4%", pad=0.1)
+#fig.colorbar(cs, cax=cax)
+fig.colorbar(cs, orientation='vertical', fraction=0.05, aspect=5)
+ax.set_title('Streamwise velocity, XY-plane')
+
+ax.set_ylabel('YLabel0')
+ax.set_xlabel('XLabel0')
+
+for i in range(2):
+    ax = fig.add_subplot(gs[1, i])
+    ax.plot(np.arange(1., 0., -0.1) * 2000., np.arange(1., 0., -0.1))
+    ax.set_ylabel('YLabel1 %d' % i)
+    ax.set_xlabel('XLabel1 %d' % i)
+    if i == 0:
+        for tick in ax.get_xticklabels():
+            tick.set_rotation(55)
+
+ax = fig.add_subplot(gs[2, :])
+ax.plot(np.arange(0, 1e6, 1000))
+ax.set_ylabel('YLabel0')
+ax.set_xlabel('XLabel0')
+
+fig.align_labels()  # same as fig.align_xlabels(); fig.align_ylabels()
+
+plt.show()
