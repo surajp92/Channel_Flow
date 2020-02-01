@@ -374,6 +374,7 @@ if runmode == 1:
         W = data.get('W')
         
     if resume == 1:
+        print('Loading old velocity field...')
         data =  np.load('fields1.npz') #add variables saved from runmode = 1
         U = data['U']
         V = data['V']
@@ -391,6 +392,7 @@ if runmode == 2:
     
     #print('Field1 load script to be added')
     if resume == 1:
+        print('Loading old velocity field...')
         data =  np.load('fields2.npz') #add variables saved from runmode = 2
         U = data['U']
         V = data['V']
@@ -706,27 +708,26 @@ def ThreeDChannel_CreatePoissonMatrix(N1,N2,N3,FX,FY,FZ,
 # have been built into these operators.
 #-----------------------------------------------------------------------------#
 
-
-
 if resumeoperators == 1:
     print('Loading saved differential operators...')
     if runmode == 0:
-        data = np.load('Operators0.npz', allow_pickle=True)
+        data = scipy.io.loadmat('Operators0.mat')#, allow_pickle=True)
     if runmode == 1:
-        data = np.load('Operators1.npz', allow_pickle=True)
+        data = scipy.io.loadmat('Operators1.mat')
     if runmode == 2:
-        data = np.load('Operators2.npz', allow_pickle=True)
+        data = scipy.io.loadmat('Operators2.mat')
     
-    Dx = data['Dx']
-    Dy = data['Dy']
-    Dz = data['Dz']
-    Dxx = data['Dxx']
-    Dyy = data['Dyy']
-    Dzz = data['Dzz']
-    Dxp = data['Dxp']
-    Dyp = data['Dyp']
-    Dzp = data['Dzp']
-    M = data['M']
+    Dx = data.get('Dx')
+    Dy = data.get('Dy')
+    Dz = data.get('Dz')
+    Dxx = data.get('Dxx')
+    Dyy = data.get('Dyy')
+    Dzz = data.get('Dzz')
+    Dxp = data.get('Dxp')
+    Dyp = data.get('Dyp')
+    Dzp = data.get('Dzp')
+    M = data.get('M')
+    
     del data
     
 else:    
@@ -778,16 +779,24 @@ else:
     # save operators script to be added
     if retainoperators == 1:
         if runmode == 0:
-            np.savez('Operators0.npz', Dx=Dx, Dy=Dy, Dz=Dz, Dxx=Dxx, Dyy=Dyy, Dzz=Dzz,
-                     Dxp=Dxp, Dyp=Dyp, Dzp=Dzp, M=M)
+            scipy.io.savemat('Operators0.mat',{'Dx':Dx,'Dy':Dy, 'Dz':Dz,
+                                               'Dxx':Dxx, 'Dyy':Dyy, 'Dzz':Dzz,
+                                               'Dxp':Dxp, 'Dyp':Dyp, 'Dzp':Dzp, 
+                                               'M':M})
             
         if runmode == 1:
-            np.savez('Operators1.npz', Dx=Dx, Dy=Dy, Dz=Dz, Dxx=Dxx, Dyy=Dyy, Dzz=Dzz, 
-                     Dxp=Dxp, Dyp=Dyp, Dzp=Dzp, M=M)
+            scipy.io.savemat('Operators1.mat',{'Dx':Dx,'Dy':Dy, 'Dz':Dz,
+                                               'Dxx':Dxx, 'Dyy':Dyy, 'Dzz':Dzz,
+                                               'Dxp':Dxp, 'Dyp':Dyp, 'Dzp':Dzp, 
+                                               'M':M})
         
         if runmode == 2:
-            np.savez('Operators2.npz', Dx=Dx, Dy=Dy, Dz=Dz, Dxx=Dxx, Dyy=Dyy, Dzz=Dzz,
-                     Dxp=Dxp, Dyp=Dyp, Dzp=Dzp, M=M)
+            scipy.io.savemat('Operators2.mat',{'Dx':Dx,'Dy':Dy, 'Dz':Dz,
+                                               'Dxx':Dxx, 'Dyy':Dyy, 'Dzz':Dzz,
+                                               'Dxp':Dxp, 'Dyp':Dyp, 'Dzp':Dzp, 
+                                               'M':M})
+#            np.savez('Operators2.npz', Dx=Dx, Dy=Dy, Dz=Dz, Dxx=Dxx, Dyy=Dyy, Dzz=Dzz,
+#                     Dxp=Dxp, Dyp=Dyp, Dzp=Dzp, M=M)
 
 #%%
 # check operators wit matlab
@@ -1509,17 +1518,16 @@ for i in range(1,nsteps+1):
                 gs = gridspec.GridSpec(3, 2)
                 
                 ax = fig.add_subplot(gs[0, :])
-                cs = ax.contourf(x,z[1:N3-1],Uslice, 20, cmap = 'jet',vmin=0,vmax=USC*Uscale)
+                cs = ax.contourf(x,z[1:N3-1],Uslice, 20, cmap = 'jet',vmin=0,vmax=USC*Uscale,
+                                 levels=np.linspace(0,USC*Uscale,100))
                 
-                m = plt.cm.ScalarMappable(cmap='jet')
-                m.set_array(Uslice.T)
-                m.set_clim(0, USC*Uscale)
-            
-                cb = fig.colorbar(m, orientation='vertical', fraction=0.15, aspect=5,
-                             boundaries=np.linspace(0, USC*Uscale, 10))
-#                cb.formatter.set_powerlimits((0, 0))
-#                cb.ax.yaxis.set_offset_position('right')                         
-#                cb.update_ticks()
+                # This is the fix for the white lines between contour levels
+                for c in cs.collections:
+                    c.set_edgecolor("face")
+
+                cs.set_clim(0, USC*Uscale)
+                cb = fig.colorbar(cs, orientation='vertical', fraction=0.15, aspect=5,
+                             ticks=np.linspace(0, USC*Uscale, 5),format='%.1f')
                 
                 #ax.set_aspect(1.0)
                 ax.set_xlabel('x')
@@ -1527,34 +1535,34 @@ for i in range(1,nsteps+1):
                 ax.set_title('Streamwise velocity, XY-plane')
                 
                 ax = fig.add_subplot(gs[1, :])
-                cs = ax.contourf(x,y,Uslice2, 20, cmap = 'jet',vmin=0,vmax=USC*Uscale)
+                cs = ax.contourf(x,y,Uslice2, 20, cmap = 'jet',vmin=0,vmax=USC*Uscale,
+                                 levels=np.linspace(0,USC*Uscale,100))
                 
-                m = plt.cm.ScalarMappable(cmap='jet')
-                m.set_array(Uslice2.T)
-                m.set_clim(0, USC*Uscale)
+                for c in cs.collections:
+                    c.set_edgecolor("face")
                 
+                cs.set_clim(0, USC*Uscale)                                
                 cb = fig.colorbar(cs, orientation='vertical', fraction=0.15, aspect=5, \
-                                  boundaries=np.linspace(0, USC*Uscale, 5))
-                cb.formatter.set_powerlimits((0, 0))
-                cb.ax.yaxis.set_offset_position('right')                         
-                cb.update_ticks()
+                                  ticks=np.linspace(0, USC*Uscale, 5),format='%.1f')
                 
                 #ax.set_aspect(1.0)
                 ax.set_xlabel('x')
                 ax.set_ylabel('z')
-                ax.set_title('Streamwise velocity, XZ-plane + ${y}^{+} = $'+ \
+                ax.set_title('Streamwise velocity, XZ-plane ' + '${y}^{+} = $'+ \
                              str(np.round(yplumean[yplane],1)))
                 
                 
                 ax = fig.add_subplot(gs[2, 0])
-                cs = ax.contourf(y,z[1:N3-1],Uslice3, 20, cmap = 'jet',vmin=0,vmax=USC*Uscale)
+                cs = ax.contourf(y,z[1:N3-1],Uslice3, 20, cmap = 'jet',vmin=0,vmax=USC*Uscale,
+                                 levels=np.linspace(0,USC*Uscale,100))
                 
-                m = plt.cm.ScalarMappable(cmap='jet')
-                m.set_array(Uslice3.T)
-                m.set_clim(0, USC*Uscale)
+                for c in cs.collections:
+                    c.set_edgecolor("face")
+                                 
+#                cs.set_clim(0, USC*Uscale
                 
 #                cb = fig.colorbar(cs, orientation='vertical', fraction=0.15, aspect=5, \
-#                                  boundaries=np.linspace(0, USC*Uscale, 5))
+#                                  ticks=np.linspace(0, USC*Uscale, 5),format='%.1f')
 #                cb.formatter.set_powerlimits((0, 0))
 #                cb.ax.yaxis.set_offset_position('right')                         
 #                cb.update_ticks()
@@ -1565,14 +1573,15 @@ for i in range(1,nsteps+1):
                 ax.set_title('Streamwise velocity, ZY-plane 1')
                 
                 ax = fig.add_subplot(gs[2, 1])
-                cs = ax.contourf(y,z[1:N3-1],Uslice4, 20, cmap = 'jet',vmin=0,vmax=USC*Uscale)
+                cs = ax.contourf(y,z[1:N3-1],Uslice4, 20, cmap = 'jet',vmin=0,vmax=USC*Uscale,
+                                 levels=np.linspace(0,USC*Uscale,100))
                 
-                m = plt.cm.ScalarMappable(cmap='jet')
-                m.set_array(Uslice3.T)
-                m.set_clim(0, USC*Uscale)
-                
+                for c in cs.collections:
+                    c.set_edgecolor("face")
+
+#                cs.set_clim(0, USC*Uscale
 #                cb = fig.colorbar(cs, orientation='vertical', fraction=0.15, aspect=5, \
-#                                  boundaries=np.linspace(0, USC*Uscale, 5))
+#                                  ticks=np.linspace(0, USC*Uscale, 5),format='%.1f')
 #                cb.formatter.set_powerlimits((0, 0))
 #                cb.ax.yaxis.set_offset_position('right')                         
 #                cb.update_ticks()
