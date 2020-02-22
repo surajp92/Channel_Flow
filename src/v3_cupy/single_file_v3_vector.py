@@ -8,6 +8,7 @@ Created on Fri Jan 31 09:58:10 2020
 
 import numpy as np
 import cupy as cp
+import cupyx as cpx
 from scipy.sparse import spdiags
 import scipy.sparse as sp
 import scipy.io
@@ -46,11 +47,11 @@ mpl.rcParams['text.latex.preamble'] = [r'\usepackage{amsmath}']
 # runmode = 2: Re-initialize results from runmode=1 onto new, interpolated
 # grid
 
-runmode = 2
+runmode = 0
 retain = 1 # Select whether to save results 
-resume = 1 # Select whether to load results
+resume = 0 # Select whether to load results
 retainoperators = 1 # Select whether to save differential operators
-resumeoperators = 1 # Select whether to load differential operators
+resumeoperators = 0 # Select whether to load differential operators
 interpolatenew = 0 # Select whether to interpolate results onto a new grid
                     # This requires runmode = 2
 validate = 0    # Use when same initial field as matlab is to be used
@@ -128,7 +129,7 @@ pscheme = 2; # Select order of pressure differentiation scheme for
              # prediction of intermediary pressures in time integration
              
 # Nominal setup:
-res = 72 # Resolution; must be divisible by 2
+res = 36 # Resolution; must be divisible by 2
 Wscale = 1/2 # Geometry span scale 
 Lscale = 1/2 # Geometry length scale
 N1 = round(2*res*Wscale) # Span
@@ -197,6 +198,7 @@ MSRdUmeandy = MSRmean[:,3];
 MSRWmean = MSRmean[:,4];
 MSRdWmeandy = MSRmean[:,5];
 MSRPmean = MSRmean[:,6];
+
 MSRfluc = np.loadtxt('chan180.reystress');
 MSRflucyplus = MSRfluc[:,1];
 MSRflucuplus = (MSRfluc[:,2])**0.5;
@@ -273,22 +275,25 @@ def ThreeDChannel_newgridvelocity(N1,N2,N3,X,Y,Z,U,V,W,Xn,Yn,Zn,pnum):
 # Initialize enumeration matrix
 #-----------------------------------------------------------------------------#
 
-A = np.zeros((N1*N2*N3,1))
-SA = np.shape(A)
+#A = np.zeros((N1*N2*N3,1))
+#SA = np.shape(A)
+#
+##for aa in range(SA[0]):
+##    A[aa] = aa
+#
+#pp = 0
+#A = np.zeros((N1,N2,N3),dtype=int)
+#
+#for k in range(N3):
+#    for j in range(N2):
+#        for i in range(N1):
+#            A[i,j,k] = int(pp)
+#            pp = pp +1
 
-#for aa in range(SA[0]):
-#    A[aa] = aa
+pp = np.linspace(0,N1*N2*N3-1,N1*N2*N3,dtype=int)
+A = np.reshape(pp,[N1,N2,N3],order='F')
+SA = np.shape(A.reshape(-1,1))
 
-pp = 0
-A = np.zeros((N1,N2,N3),dtype=int)
-
-for k in range(N3):
-    for j in range(N2):
-        for i in range(N1):
-            A[i,j,k] = int(pp)
-            pp = pp +1
-
-#A = np.reshape(A,[N1,N2,N3])
 
 dx = Length/N2; dy = Width/N1; dz = Height/(N3-2);
 
@@ -310,16 +315,21 @@ fz = fz-fz[0];
 z = np.zeros((N3))
 z[0] = -(fz[1]-fz[0])*0.5;
 
-for p in range(1,N3-1):
-    z[p] = fz[p-1] + 0.5*(fz[p] - fz[p-1])
+#for p in range(1,N3-1):
+#    z[p] = fz[p-1] + 0.5*(fz[p] - fz[p-1])
+
+z[1:N3-1] = fz[0:N3-2] + 0.5*(fz[1:N3-1] - fz[0:N3-2]) # vectorized
 
 z[N3-1] = fz[N3-2] + 0.5*(fz[N3-2] - fz[N3-3])
-
 z = z/fz[N3-2]*Height; fz = fz/fz[N3-2]*Height;
 
+
 FZ = np.zeros((N1,N2,N3))
-for p in range(1,N3-1):
-    FZ[:,:,p] = fz[p]-fz[p-1]
+
+#for p in range(1,N3-1):
+#    FZ[:,:,p] = fz[p]-fz[p-1]
+
+FZ[:,:,1:N3-1] = fz[1:N3-1] - fz[0:N3-2] # vectorized
 
 FZ[:,:,0] = FZ[:,:,1]; FZ[:,:,N3-1] = FZ[:,:,N3-2];
 
@@ -382,8 +392,6 @@ if runmode == 1:
             V = data.get('V')
             W = data.get('W')
         
-            
-
 if runmode == 2:
     if resume == 1:
         print('Loading old velocity field...')
@@ -418,6 +426,14 @@ AW = A[iny[0]:iny[-1]+1,west,inz[0]:inz[-1]+1] - N1*N2
 AA = A[iny[0]:iny[-1]+1,inx[0]:inx[-1]+1,air] - N1*N2
 AG = A[iny[0]:iny[-1]+1,inx[0]:inx[-1]+1,ground] - N1*N2
 
+A0c = A[:,:,inz[0]:inz[-1]+1] - N1*N2
+ANc = A[north[0]:north[-1]+1,inx[0]:inx[-1]+1,inz[0]:inz[-1]+1] - N1*N2
+ASc = A[south[0]:south[-1]+1,inx[0]:inx[-1]+1,inz[0]:inz[-1]+1] - N1*N2
+AEc = A[iny[0]:iny[-1]+1,east[0]:east[-1]+1,inz[0]:inz[-1]+1] - N1*N2
+AWc = A[iny[0]:iny[-1]+1,west[0]:west[-1]+1,inz[0]:inz[-1]+1] - N1*N2
+AAc = A[iny[0]:iny[-1]+1,inx[0]:inx[-1]+1,air[0]:air[-1]+1] - N1*N2
+AGc = A[iny[0]:iny[-1]+1,inx[0]:inx[-1]+1,ground[0]:ground[-1]+1] - N1*N2
+
 u = np.reshape(U,[-1,1],order='F')
 v = np.reshape(V,[-1,1],order='F')
 w = np.reshape(W,[-1,1],order='F')
@@ -437,6 +453,11 @@ def ThreeDChannel_Differentiate1(N1,N2,N3,FX,FY,FZ,
     M = spdiags(data, diags, N1*N2*(N3-2), N1*N2*(N3-2))
     #M = sp.csc_matrix(M)
     M = sp.lil_matrix(M)
+    
+#    data = cp.zeros((7,(N1*N2*(N3-2))))
+#    diags = cp.array([-N1*(N3-2), -N1, -1, 0, 1, N1, N1*(N3-2)])
+#    M = cpx.scipy.sparse.spdiags(data, diags, N1*N2*(N3-2), N1*N2*(N3-2))
+#    M = cpx.scipy.sparse.csc_matrix(M)
         
     for k in inz-1:
         for j in inx:
@@ -488,6 +509,12 @@ def ThreeDChannel_Differentiate1(N1,N2,N3,FX,FY,FZ,
     M = sp.csc_matrix(M, copy=False)
                    
     return M
+
+start = time.time()
+Dx = ThreeDChannel_Differentiate1(N1,N2,N3,FX,FY,FZ,
+                                     inx,iny,inz,A0,AN,AS,AE,AW,AA,AG,east,
+                                     west,north,south,air,ground,2)
+print('Time = ', time.time() - start)
 
 #%% 
 

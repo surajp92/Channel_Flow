@@ -8,6 +8,7 @@ Created on Fri Jan 31 09:58:10 2020
 
 import numpy as np
 import cupy as cp
+import cupyx as cpx
 from scipy.sparse import spdiags
 import scipy.sparse as sp
 import scipy.io
@@ -46,11 +47,11 @@ mpl.rcParams['text.latex.preamble'] = [r'\usepackage{amsmath}']
 # runmode = 2: Re-initialize results from runmode=1 onto new, interpolated
 # grid
 
-runmode = 2
+runmode = 0
 retain = 1 # Select whether to save results 
-resume = 1 # Select whether to load results
+resume = 0 # Select whether to load results
 retainoperators = 1 # Select whether to save differential operators
-resumeoperators = 1 # Select whether to load differential operators
+resumeoperators = 0 # Select whether to load differential operators
 interpolatenew = 0 # Select whether to interpolate results onto a new grid
                     # This requires runmode = 2
 validate = 0    # Use when same initial field as matlab is to be used
@@ -73,26 +74,26 @@ if TIM == 1:
 # RK2
 if TIM == 2:
     s = 2
-    a = np.zeros((s,s))
+    a = cp.zeros((s,s))
     a[1,0] = 1
-    b = np.array([1/2, 1/2])
-    c = np.array([0, 1])
+    b = cp.array([1/2, 1/2])
+    c = cp.array([0, 1])
 
 # RK3
 if TIM == 3:
     s = 3
-    a = np.zeros((s,s))
+    a = cp.zeros((s,s))
     a[1,0] = 1/2; a[2,0] = -1; a[2,1] = 2;
-    b = np.array([1/6, 2/3, 1/6])
-    c = np.array([0, 1/2, 1])
+    b = cp.array([1/6, 2/3, 1/6])
+    c = cp.array([0, 1/2, 1])
     
 # RK4
 if TIM == 4:
     s = 4
-    a = np.zeros((s,s))
+    a = cp.zeros((s,s))
     a[1,0] = 1/2; a[2,1] = 1/2; a[3,2] = 1;
-    b = np.array([1/6, 1/3, 1/3, 1/6])
-    c = np.array([0, 1/2, 1/2, 1])    
+    b = cp.array([1/6, 1/3, 1/3, 1/6])
+    c = cp.array([0, 1/2, 1/2, 1])    
     
 #-----------------------------------------------------------------------------#
 # Simulation duration and time step options
@@ -128,7 +129,7 @@ pscheme = 2; # Select order of pressure differentiation scheme for
              # prediction of intermediary pressures in time integration
              
 # Nominal setup:
-res = 72 # Resolution; must be divisible by 2
+res = 36 # Resolution; must be divisible by 2
 Wscale = 1/2 # Geometry span scale 
 Lscale = 1/2 # Geometry length scale
 N1 = round(2*res*Wscale) # Span
@@ -137,7 +138,7 @@ N3 = res+2 # Wall-normal
 ctanh = 5E-2 # tanh-condensing factor, smaller = uniformer
 
 # Geometry based on study by Moser et al.
-Length = 4*np.pi*Lscale; Width = Wscale*2*np.pi; Height = 2;
+Length = 4*cp.pi*Lscale; Width = Wscale*2*cp.pi; Height = 2;
 
 Retau = 180 # Set target shear Reynolds number Re_tau
 nu = 1.9E-3 # Kinematic viscosity
@@ -150,7 +151,7 @@ gz = 0
 Dhyd = Height/2 # Length scale for ReD
 Unom = ReD*nu/Dhyd # Starting velocity
 Uscale = 1.2*Unom
-utnom = np.sqrt(0.5*Height*gx)
+utnom = cp.sqrt(0.5*Height*gx)
 
 if runmode == 0:
     UF = 0  # laminar flow
@@ -161,7 +162,7 @@ elif runmode == 2:
 
 
 dt = CoTarget*(Length/N2)/Uscale # initial time step
-parray = np.zeros((N1*N2*(N3-2),pscheme+1))
+parray = cp.zeros((N1*N2*(N3-2),pscheme+1))
 
 #-----------------------------------------------------------------------------#
 # Plot settings (to be done)
@@ -197,6 +198,7 @@ MSRdUmeandy = MSRmean[:,3];
 MSRWmean = MSRmean[:,4];
 MSRdWmeandy = MSRmean[:,5];
 MSRPmean = MSRmean[:,6];
+
 MSRfluc = np.loadtxt('chan180.reystress');
 MSRflucyplus = MSRfluc[:,1];
 MSRflucuplus = (MSRfluc[:,2])**0.5;
@@ -273,74 +275,82 @@ def ThreeDChannel_newgridvelocity(N1,N2,N3,X,Y,Z,U,V,W,Xn,Yn,Zn,pnum):
 # Initialize enumeration matrix
 #-----------------------------------------------------------------------------#
 
-A = np.zeros((N1*N2*N3,1))
-SA = np.shape(A)
+#A = np.zeros((N1*N2*N3,1))
+#SA = np.shape(A)
+#
+##for aa in range(SA[0]):
+##    A[aa] = aa
+#
+#pp = 0
+#A = np.zeros((N1,N2,N3),dtype=int)
+#
+#for k in range(N3):
+#    for j in range(N2):
+#        for i in range(N1):
+#            A[i,j,k] = int(pp)
+#            pp = pp +1
 
-#for aa in range(SA[0]):
-#    A[aa] = aa
+pp = cp.linspace(0,N1*N2*N3-1,N1*N2*N3,dtype=int)
+A = cp.reshape(pp,[N1,N2,N3],order='F')
+SA = np.shape(A.reshape(-1,1))
 
-pp = 0
-A = np.zeros((N1,N2,N3),dtype=int)
-
-for k in range(N3):
-    for j in range(N2):
-        for i in range(N1):
-            A[i,j,k] = int(pp)
-            pp = pp +1
-
-#A = np.reshape(A,[N1,N2,N3])
 
 dx = Length/N2; dy = Width/N1; dz = Height/(N3-2);
 
 # define x and y as homogeneous and fit for periodicity
-x = np.linspace(dx,Length,N2); x = x-dx/2;
-y = np.linspace(dy,Width,N1); y = y-dy/2;
+x = cp.linspace(dx,Length,N2); x = x-dx/2;
+y = cp.linspace(dy,Width,N1); y = y-dy/2;
 
-FX = np.zeros((N1,N2,N3)); FX[:,:,:] = dx; # 1D "Cell size"
-FY = np.zeros((N1,N2,N3)); FY[:,:,:] = dy; # 1D "Cell size"
+FX = cp.zeros((N1,N2,N3)); FX[:,:,:] = dx; # 1D "Cell size"
+FY = cp.zeros((N1,N2,N3)); FY[:,:,:] = dy; # 1D "Cell size"
 
 #-----------------------------------------------------------------------------#
 # Define wall-normal points via a hyperbolic tangent function
 #-----------------------------------------------------------------------------#
 
-fz = np.linspace(-(N3/2-1),(N3/2-1),N3-1);
-fz = np.tanh(ctanh*fz);
+fz = cp.linspace(-(N3/2-1),(N3/2-1),N3-1);
+fz = cp.tanh(ctanh*fz);
 fz = fz-fz[0];
 
-z = np.zeros((N3))
+z = cp.zeros((N3))
 z[0] = -(fz[1]-fz[0])*0.5;
 
-for p in range(1,N3-1):
-    z[p] = fz[p-1] + 0.5*(fz[p] - fz[p-1])
+#for p in range(1,N3-1):
+#    z[p] = fz[p-1] + 0.5*(fz[p] - fz[p-1])
+
+z[1:N3-1] = fz[0:N3-2] + 0.5*(fz[1:N3-1] - fz[0:N3-2]) # vectorized
 
 z[N3-1] = fz[N3-2] + 0.5*(fz[N3-2] - fz[N3-3])
-
 z = z/fz[N3-2]*Height; fz = fz/fz[N3-2]*Height;
 
-FZ = np.zeros((N1,N2,N3))
-for p in range(1,N3-1):
-    FZ[:,:,p] = fz[p]-fz[p-1]
+
+FZ = cp.zeros((N1,N2,N3))
+
+#for p in range(1,N3-1):
+#    FZ[:,:,p] = fz[p]-fz[p-1]
+
+FZ[:,:,1:N3-1] = fz[1:N3-1] - fz[0:N3-2] # vectorized
 
 FZ[:,:,0] = FZ[:,:,1]; FZ[:,:,N3-1] = FZ[:,:,N3-2];
 
-[X,Y,Z] = np.meshgrid(x,y,z);
+[X,Y,Z] = cp.meshgrid(x,y,z);
 
 X = X[:,:,1:N3-1]
 Y = Y[:,:,1:N3-1]
 Z = Z[:,:,1:N3-1]
 
 # x index notation
-inx = np.linspace(0,N2-1,N2,dtype = int); inx = inx.T;
+inx = cp.linspace(0,N2-1,N2,dtype = int); inx = inx.T;
 east = inx+1; west = inx-1;
 
 # y index notation
-iny = np.linspace(0,N1-1,N1,dtype = int); iny = iny.T;
+iny = cp.linspace(0,N1-1,N1,dtype = int); iny = iny.T;
 north = iny+1; south = iny-1;
 
 # Make a different index notation for the z-direction (wall bounded)
 # The current methodology uses a staggered grid with a ghost cell
 # within the wall
-inz = np.linspace(1,N3-2,N3-2,dtype = int); inz = inz.T; 
+inz = cp.linspace(1,N3-2,N3-2,dtype = int); inz = inz.T; 
 air = inz + 1; ground = inz - 1;
 
 # Assign indices for periodic boundaries
@@ -349,9 +359,9 @@ east[N2-1] = 0; west[0] = N2-1; north[N1-1] = 0; south[0] = N1-1;
 #-----------------------------------------------------------------------------#
 # Channel flow initialization
 #-----------------------------------------------------------------------------#
-U = np.zeros((N1,N2,N3-2))
-V = np.zeros((N1,N2,N3-2))
-W = np.zeros((N1,N2,N3-2))
+U = cp.zeros((N1,N2,N3-2))
+V = cp.zeros((N1,N2,N3-2))
+W = cp.zeros((N1,N2,N3-2))
 
 if runmode == 0:
     U[:,:,:] = Unom
@@ -369,12 +379,12 @@ if runmode == 1:
         U = data['U']
         V = data['V']
         W = data['W']
-        UF1 = UF*(np.random.rand(N1,N2,N3-2) - 0.5)
-        UF2 = UF*(np.random.rand(N1,N2,N3-2) - 0.5)
-        UF3 = UF*(np.random.rand(N1,N2,N3-2) - 0.5)
-        U = U + UF1*np.max(U)
-        V = V + UF2*np.max(U)
-        W = W + UF3*np.max(U)
+        UF1 = UF*(cp.random.rand(N1,N2,N3-2) - 0.5)
+        UF2 = UF*(cp.random.rand(N1,N2,N3-2) - 0.5)
+        UF3 = UF*(cp.random.rand(N1,N2,N3-2) - 0.5)
+        U = U + UF1*cp.max(U)
+        V = V + UF2*cp.max(U)
+        W = W + UF3*cp.max(U)
         
         if validate == 1:
             data = scipy.io.loadmat('initial_field.mat')
@@ -382,8 +392,6 @@ if runmode == 1:
             V = data.get('V')
             W = data.get('W')
         
-            
-
 if runmode == 2:
     if resume == 1:
         print('Loading old velocity field...')
@@ -410,19 +418,38 @@ if runmode == 2:
 #-----------------------------------------------------------------------------#
 # Matrix numbering reference for discrete differential operators
 #-----------------------------------------------------------------------------#
-A0 = A[:,:,inz[0]:inz[-1]+1] - N1*N2
-AN = A[north,inx[0]:inx[-1]+1,inz[0]:inz[-1]+1] - N1*N2
-AS = A[south,inx[0]:inx[-1]+1,inz[0]:inz[-1]+1] - N1*N2
-AE = A[iny[0]:iny[-1]+1,east,inz[0]:inz[-1]+1] - N1*N2
-AW = A[iny[0]:iny[-1]+1,west,inz[0]:inz[-1]+1] - N1*N2
-AA = A[iny[0]:iny[-1]+1,inx[0]:inx[-1]+1,air] - N1*N2
-AG = A[iny[0]:iny[-1]+1,inx[0]:inx[-1]+1,ground] - N1*N2
+Anum = cp.asnumpy(A)
+inx_n = cp.asnumpy(inx)
+iny_n = cp.asnumpy(iny)
+inz_n = cp.asnumpy(inz)
+north_n = cp.asnumpy(north)
+south_n = cp.asnumpy(south)
+east_n = cp.asnumpy(east)
+west_n = cp.asnumpy(west)
+air_n = cp.asnumpy(air)
+ground_n = cp.asnumpy(ground)
 
-u = np.reshape(U,[-1,1],order='F')
-v = np.reshape(V,[-1,1],order='F')
-w = np.reshape(W,[-1,1],order='F')
+A0 = Anum[:,:,inz_n[0]:inz_n[-1]+1] - N1*N2
+AN = Anum[north_n,inx_n[0]:inx_n[-1]+1,inz_n[0]:inz_n[-1]+1] - N1*N2
+AS = Anum[south_n,inx_n[0]:inx_n[-1]+1,inz_n[0]:inz_n[-1]+1] - N1*N2
+AE = Anum[iny_n[0]:iny_n[-1]+1,east_n,inz_n[0]:inz_n[-1]+1] - N1*N2
+AW = Anum[iny_n[0]:iny_n[-1]+1,west_n,inz_n[0]:inz_n[-1]+1] - N1*N2
+AA = Anum[iny_n[0]:iny_n[-1]+1,inx_n[0]:inx_n[-1]+1,air_n] - N1*N2
+AG = Anum[iny_n[0]:iny_n[-1]+1,inx_n[0]:inx_n[-1]+1,ground_n] - N1*N2
 
-pold = np.zeros((N1*N2*(N3-2),1))
+A0 = cp.array(A0)
+AN = cp.array(AN)
+AS = cp.array(AS)
+AE = cp.array(AE)
+AW = cp.array(AW)
+AA = cp.array(AA)
+AG = cp.array(AG)
+
+u = cp.reshape(U,[-1,1],order='F')
+v = cp.reshape(V,[-1,1],order='F')
+w = cp.reshape(W,[-1,1],order='F')
+
+pold = cp.zeros((N1*N2*(N3-2),1))
 
 #%% 
 
@@ -435,12 +462,17 @@ def ThreeDChannel_Differentiate1(N1,N2,N3,FX,FY,FZ,
     data = np.zeros((7,(N1*N2*(N3-2))))
     diags = np.array([-N1*(N3-2), -N1, -1, 0, 1, N1, N1*(N3-2)])
     M = spdiags(data, diags, N1*N2*(N3-2), N1*N2*(N3-2))
-    #M = sp.csc_matrix(M)
-    M = sp.lil_matrix(M)
+    M = sp.csc_matrix(M)
+    #M = sp.lil_matrix(M)
+    
+#    data = cp.zeros((7,(N1*N2*(N3-2))))
+#    diags = cp.array([-N1*(N3-2), -N1, -1, 0, 1, N1, N1*(N3-2)])
+#    M = cpx.scipy.sparse.spdiags(data, diags, N1*N2*(N3-2), N1*N2*(N3-2))
+#    M = cpx.scipy.sparse.csc_matrix(M)
         
-    for k in inz-1:
-        for j in inx:
-            for i in iny:
+    for k in cp.asnumpy(inz-1):
+        for j in cp.asnumpy(inx):
+            for i in cp.asnumpy(iny):
                 FY0 = FY[i,j,k+1]
                 FYN = FY[north[i],j,k+1]
                 FYS = FY[south[i],j,k+1]
@@ -485,9 +517,90 @@ def ThreeDChannel_Differentiate1(N1,N2,N3,FX,FY,FZ,
                         M[A0[i,j,k],A0[i,j,k]] = 1/FZ0*(FZA/(FZ0+FZA)-FZG/(FZG+FZ0) - \
                                                  FZ0/(FZA+FZ0))
     
-    M = sp.csc_matrix(M, copy=False)
+    M = cpx.scipy.sparse.csc_matrix(M, copy=False)
                    
     return M
+
+start = time.time()
+Dx = ThreeDChannel_Differentiate1(N1,N2,N3,FX,FY,FZ,
+                                     inx,iny,inz,A0,AN,AS,AE,AW,AA,AG,east,
+                                     west,north,south,air,ground,2)
+print('Time = ', start - time.time())
+
+#%%
+inb = 2
+data = np.zeros((7,(N1*N2*(N3-2))))
+diags = np.array([-N1*(N3-2), -N1, -1, 0, 1, N1, N1*(N3-2)])
+M = spdiags(data, diags, N1*N2*(N3-2), N1*N2*(N3-2))
+#M = sp.csc_matrix(M)
+M = sp.lil_matrix(M)
+
+data = cp.zeros((7,(N1*N2*(N3-2))))
+diags = cp.array([-N1*(N3-2), -N1, -1, 0, 1, N1, N1*(N3-2)])
+M = cpx.scipy.sparse.spdiags(data, diags, N1*N2*(N3-2), N1*N2*(N3-2))
+M = cpx.scipy.sparse.csc_matrix(M)
+
+north = cp.asnumpy(north)
+south = cp.asnumpy(south)
+east = cp.asnumpy(east)
+west = cp.asnumpy(west)
+air = cp.asnumpy(air)
+ground = cp.asnumpy(ground)
+
+inx = cp.asnumpy(inx)
+iny = cp.asnumpy(iny)
+inz = cp.asnumpy(inz)
+    
+for k in cp.asnumpy(inz-1):
+    for j in cp.asnumpy(inx):
+        for i in cp.asnumpy(iny):
+            print(i,j,k)
+            FY0 = FY[i,j,k+1]
+            FYN = FY[north[i],j,k+1]
+            FYS = FY[south[i],j,k+1]
+            
+            FX0 = FX[i,j,k+1]
+            FXE = FX[i,east[j],k+1]
+            FXW = FX[i,west[j],k+1]
+            
+            FZ0 = FZ[i,j,k+1]
+            FZA = FZ[i,j,air[k]]
+            FZG = FZ[i,j,ground[k]]
+            
+            if inb == 1:
+                M[A0[i,j,k],A0[i,j,k]] = 1/FY0*(FYN/(FY0+FYN)-FYS/(FYS+FY0))
+            
+            if inb == 2:
+                M[A0[i,j,k],A0[i,j,k]] = 1/FX0*(FXE/(FX0+FXE)-FXW/(FXW+FX0))
+            
+            if inb == 3:
+                M[A0[i,j,k],A0[i,j,k]] = 1/FZ0*(FZA/(FZ0+FZA)-FZG/(FZG+FZ0))
+                
+            if inb == 1:
+                M[A0[i,j,k],AN.ravel(order='F')[A0[i,j,k]]] = 1/FY0*FY0/(FY0+FYN)
+                M[A0[i,j,k],AS.ravel(order='F')[A0[i,j,k]]] = -1/FY0*FY0/(FY0+FYS)
+            
+            if inb == 2:
+                M[A0[i,j,k],AE.ravel(order='F')[A0[i,j,k]]] = 1/FX0*FX0/(FX0+FXE)
+                M[A0[i,j,k],AW.ravel(order='F')[A0[i,j,k]]] = -1/FX0*FX0/(FX0+FXW)
+            
+            # Account for wall Dirichlet (no-slip) condition in the wall-normal direction
+            if inb == 3:
+                if AG.ravel(order='F')[A0[i,j,k]] >= 0:
+                    M[A0[i,j,k],AG.ravel(order='F')[A0[i,j,k]]] = -1/FZ0*FZ0/(FZ0+FZG)
+                else:
+                    M[A0[i,j,k],A0[i,j,k]] = 1/FZ0*(FZA/(FZ0+FZA)-FZG/(FZG+FZ0) + \
+                                             FZ0/(FZG+FZ0))
+                
+                if AA.ravel(order='F')[A0[i,j,k]] < N1*N2*(N3-2):
+                    M[A0[i,j,k],AA.ravel(order='F')[A0[i,j,k]]] = 1/FZ0*FZ0/(FZ0+FZA)
+                
+                else:
+                    M[A0[i,j,k],A0[i,j,k]] = 1/FZ0*(FZA/(FZ0+FZA)-FZG/(FZG+FZ0) - \
+                                             FZ0/(FZA+FZ0))
+
+M = cpx.scipy.sparse.csc_matrix(M, copy=False)
+
 
 #%% 
 
