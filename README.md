@@ -9,6 +9,6 @@ This repository contains the codes for three-dimensional direct numerical simula
 
 
 <div align="center">
-<img src="contour.png" width="90%">
+<img src="contour_final.png" width="90%">
 <p>Streamwise velocity in different orienttion planes for turbulent channel flow</p>
 </div>
